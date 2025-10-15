@@ -101,6 +101,79 @@ graph TD
     class H human
 ```
 
+## 🔗 A2A Protocol Integration
+
+### Enterprise Agent-to-Agent Communication
+
+The AWS Orchestrator Agent is designed as a **first-class A2A (Agent-to-Agent) protocol agent**, enabling seamless integration with enterprise agent ecosystems and multi-agent coordination.
+
+#### A2A Architecture Integration
+
+```mermaid
+graph TD
+    A[A2A Request] --> B[DefaultRequestHandler]
+    B --> C[AWSOrchestratorAgentExecutor]
+    C --> D[SupervisorAgentAdapter]
+    D --> E[SupervisorAgent]
+    E --> F[StateManager]
+    F --> G[Agent Subgraphs]
+    
+    G --> H[Analysis Agent]
+    G --> I[Generation Agent]
+    G --> J[Validation Agent]
+    G --> K[Editor Agent]
+    
+    style D fill:#e1f5fe
+    style E fill:#f3e5f5
+    style F fill:#e8f5e8
+```
+
+#### Key A2A Components
+
+1. **🔗 A2A Executor Integration**: `AWSOrchestratorAgentExecutor` implements the A2A protocol
+2. **🔄 Supervisor Agent Adapter**: Bridges LangGraph-based Supervisor with A2A protocol
+3. **🌐 A2A Server Integration**: Deployable as an A2A agent server
+4. **📊 State Management**: Enterprise-grade workflow state tracking across agent boundaries
+
+#### A2A Server Deployment
+
+```bash
+# Development A2A Server (using uv)
+uv run --active aws-orchestrator-agent \
+  --host localhost \
+  --port 10102 \
+  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
+
+# Production A2A Server
+aws-orchestrator-agent \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json \
+  --config-file config.yaml
+```
+
+#### Programmatic A2A Server Setup
+```python
+# A2A Server Setup
+from aws_orchestrator_agent.server import main
+
+# Start A2A server
+main(
+    host="0.0.0.0",
+    port=8000,
+    agent_card="aws_orchestrator_agent/card/aws_orchestrator_agent.json",
+    config_file="config.yaml"
+)
+```
+
+#### Enterprise Agent Ecosystem Benefits
+
+- **🔄 Multi-Agent Coordination**: Seamless integration with other specialized agents
+- **📊 Enterprise State Management**: Robust state orchestration across agent boundaries
+- **🛡️ Protocol Compliance**: Full A2A protocol compliance for enterprise environments
+- **📈 Scalability**: Multiple concurrent workflows with resource management
+- **🔍 Observability**: Complete workflow visibility and progress tracking
+
 ## 🎯 Core Components
 
 ### 1. 🎯 Main Supervisor Agent (`CustomSupervisorAgent`)
@@ -245,25 +318,32 @@ sequenceDiagram
 - **Real-Time Enterprise Monitoring**: Live progress tracking and reporting for enterprise workflows
 - **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality enterprise module generation
 
-### 2. **🏗️ Enterprise Modular Architecture**
+### 2. **🔗 A2A Protocol Integration Benefits**
+- **🌐 Enterprise Agent Ecosystem**: Seamless integration with other specialized agents
+- **📊 Multi-Agent Coordination**: Coordinate with security, compliance, and monitoring agents
+- **🔄 Protocol Compliance**: Full A2A protocol compliance for enterprise environments
+- **📈 Scalable Architecture**: Multiple concurrent workflows with enterprise resource management
+- **🛡️ Enterprise State Management**: Robust state orchestration across agent boundaries
+
+### 3. **🏗️ Enterprise Modular Architecture**
 - **Enterprise Agent Specialization**: Each agent has a specific, well-defined enterprise role
 - **Enterprise State Isolation**: Separate state schemas prevent conflicts in enterprise environments
 - **Enterprise Tool Integration**: Sophisticated tool-based execution for enterprise patterns
 - **Enterprise Extensibility**: Easy to add new agents and capabilities for enterprise needs
 
-### 3. **🔄 Advanced Enterprise Coordination**
+### 4. **🔄 Advanced Enterprise Coordination**
 - **Enterprise Dependency Management**: Sophisticated dependency resolution for enterprise patterns
 - **Enterprise Handoff Mechanisms**: Intelligent agent-to-agent communication for enterprise workflows
 - **Enterprise State Transformation**: Seamless state conversion between enterprise agents
 - **Enterprise Completion Detection**: Automatic completion detection and reporting for enterprise modules
 
-### 4. **🛡️ Enterprise Production-Ready Features**
+### 5. **🛡️ Enterprise Production-Ready Features**
 - **Enterprise Error Handling**: Comprehensive error handling at all levels for enterprise environments
 - **Enterprise Logging**: Structured logging throughout the system for enterprise monitoring
 - **Enterprise Monitoring**: Real-time monitoring and observability for enterprise operations
 - **Enterprise Human-in-the-Loop**: Interactive clarification and approval workflows for complex enterprise requirements
 
-### 5. **📊 Enterprise-Grade Output**
+### 6. **📊 Enterprise-Grade Output**
 - **Complete Enterprise Modules**: Full Terraform modules with all necessary enterprise files
 - **Enterprise Documentation**: Comprehensive README and inline documentation for enterprise use
 - **Enterprise Validation**: Built-in syntax and enterprise best practices validation
@@ -351,30 +431,68 @@ sequenceDiagram
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.12+
 - Terraform CLI
 - AWS CLI (for deployment)
-- Required Python packages (see requirements.txt)
+- Required Python packages (see pyproject.toml)
 - **⏱️ Time Allocation**: Allow 5-15 minutes per enterprise module generation
 
 ### Installation
+
+#### Option 1: Standalone Installation
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd aws-orchestrator-agent
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -e .
 
 # Configure environment variables
 cp .env.example .env
 # Edit .env with your configuration
 
-# Initialize the system
+# Run standalone
 python -m aws_orchestrator_agent.main
 ```
 
+#### Option 2: A2A Agent Server Deployment
+```bash
+# Install dependencies
+pip install -e .
+
+# Start A2A server with agent card
+uv run --active aws-orchestrator-agent \
+  --host localhost \
+  --port 10102 \
+  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
+```
+
+#### Option 2b: Production A2A Server
+```bash
+# Start A2A server with custom configuration
+aws-orchestrator-agent \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json \
+  --config-file config.yaml
+```
+
+#### Option 3: Docker Deployment
+```bash
+# Build Docker image
+docker build -t aws-orchestrator-agent .
+
+# Run as A2A agent server
+docker run -p 8000:8000 \
+  -e OPENAI_API_KEY=your_key \
+  -e ANTHROPIC_API_KEY=your_key \
+  aws-orchestrator-agent
+```
+
 ### Enterprise Usage
+
+#### Standalone Usage
 ```python
 from aws_orchestrator_agent.core.agents.supervisor_agent import create_supervisor_agent
 
@@ -388,6 +506,53 @@ supervisor = create_supervisor_agent(
 # ⏱️ This will take 5-15 minutes for enterprise-grade modules
 async for response in supervisor.stream("Create an enterprise S3 bucket module with advanced security and compliance features", context_id, task_id):
     print(response.content)
+```
+
+#### A2A Agent Integration
+```python
+from a2a.server import AgentServer
+from a2a.server.request_handlers import DefaultRequestHandler
+from aws_orchestrator_agent.core import GenericAgentExecutor
+from aws_orchestrator_agent.core.agents.supervisor_agent import create_supervisor_agent
+
+# Create supervisor agent
+supervisor_agent = create_supervisor_agent(config=config)
+
+# Create A2A executor
+executor = GenericAgentExecutor(agent=supervisor_agent)
+
+# Create A2A server
+server = AgentServer()
+server.register_agent(
+    name="aws-orchestrator-supervisor",
+    handler=DefaultRequestHandler(agent_executor=executor),
+    agent_card={
+        "name": "AWS Orchestrator Supervisor",
+        "description": "Intelligent AWS infrastructure orchestration with multi-agent coordination",
+        "capabilities": [
+            "terraform_generation",
+            "infrastructure_analysis", 
+            "security_validation",
+            "compliance_checking",
+            "cost_optimization"
+        ]
+    }
+)
+
+# Start A2A server
+server.start(host="0.0.0.0", port=8000)
+```
+
+#### A2A Request Example
+```json
+{
+    "method": "run_task",
+    "params": {
+        "query": "Create a VPC with subnets and security groups",
+        "context_id": "ctx-123",
+        "task_id": "task-456"
+    }
+}
 ```
 
 ## 📚 Documentation
@@ -426,7 +591,7 @@ mypy
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 

@@ -40,3 +40,14 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *$py.class
+
+### Pythod build ###
+build/
+dist/
+*.egg-info/
+
+### Python tests ###
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
