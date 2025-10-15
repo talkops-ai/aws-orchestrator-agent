@@ -1,0 +1,42 @@
+{
+    "name": "AWS Orchestrator Agent",
+    "description": "AWS Orchestrator Agent",
+    "url": "http://localhost:10102",
+    "provider": null,
+    "version": "1.0.0",
+    "documentationUrl": null,
+    "capabilities": {
+        "streaming": "True",
+        "pushNotifications": "True",
+        "stateTransitionHistory": "False"
+    },
+    "authentication": {
+        "credentials": null,
+        "schemes": [
+            "public"
+        ]
+    },
+    "defaultInputModes": [
+        "text",
+        "text/plain"
+    ],
+    "defaultOutputModes": [
+        "text",
+        "text/plain"
+    ],
+    "skills": [
+        {
+            "id": "orchestrate_aws_task",
+            "name": "Orchestrate AWS Task",
+            "description": "Orchestrates an AWS task",
+            "tags": [
+                "orchestrate_aws_task"
+            ],
+            "examples": [
+                "Can you help me in provisioning a new aws resource via terraform"
+            ],
+            "inputModes": null,
+            "outputModes": null
+        }
+    ]
+}
