@@ -38,6 +38,7 @@ requirements_logger = AgentLogger("REQUIREMENTS_ANALYZER_REACT")
 # Global variables for LLM and parsers
 _model = None
 _model_higher = None  # Higher-tier model for complex reasoning tasks
+_model_react = None
 _requirements_parser_prompt = None
 _infra_requirements_parser = None
 _service_discovery_parser = None
@@ -179,7 +180,7 @@ class TerraformAttributeMapping(BaseModel):
 
 def _initialize_requirements_tools(config: Config):
     """Initialize LLM and parsers for requirements tools."""
-    global _model, _model_higher, _infra_requirements_parser, _requirements_parser_prompt, _service_discovery_parser, _service_discovery_prompt, _service_discovery_system_prompt, _service_discovery_human_prompt, _mcp_client, _terraform_attribute_mapping_parser, _terraform_resource_attributes_parser
+    global _model, _model_higher, _model_react, _infra_requirements_parser, _requirements_parser_prompt, _service_discovery_parser, _service_discovery_prompt, _service_discovery_system_prompt, _service_discovery_human_prompt, _mcp_client, _terraform_attribute_mapping_parser, _terraform_resource_attributes_parser
     
     if _model is None:
         # Initialize standard LLM for simple tasks
@@ -198,6 +199,14 @@ def _initialize_requirements_tools(config: Config):
             model=llm_higher_config['model'],
             temperature=llm_higher_config['temperature'],
             max_tokens=llm_higher_config['max_tokens']
+        )
+        
+        llm_react_config = config.get_llm_react_config()
+        _model_react = LLMProvider.create_llm(
+            provider=llm_react_config['provider'],
+            model=llm_react_config['model'],
+            temperature=llm_react_config['temperature'],
+            max_tokens=llm_react_config['max_tokens']
         )
         
         _mcp_client = create_mcp_client(host=config.TERRAFORM_MCP_SERVER_HOST, port=config.TERRAFORM_MCP_SERVER_PORT, transport=config.TERRAFORM_MCP_SERVER_TRANSPORT)
@@ -461,7 +470,7 @@ async def aws_service_discovery_tool(requirements_analysis: str) -> AWSServiceMa
         if 'formatted_messages' not in locals():
             # This means we used the try/except path and already have formatted_messages
             formatted_messages = formatted_prompt
-        llm_response = await _model.ainvoke(formatted_messages)
+        llm_response = await _model_higher.ainvoke(formatted_messages)
         
         if isinstance(llm_response, AIMessage):
             response = llm_response.content
@@ -724,7 +733,7 @@ async def get_terraform_resource_attributes_tool(terraform_resource_name: str) -
         formatted_prompt = resource_prompt_template.format(terraform_resource_name=terraform_resource_name)
         
         # Get LLM response
-        llm_response = await _model.ainvoke(formatted_prompt)
+        llm_response = await _model_higher.ainvoke(formatted_prompt)
         
         if isinstance(llm_response, AIMessage):
             content = llm_response.content
@@ -743,14 +752,14 @@ async def get_terraform_resource_attributes_tool(terraform_resource_name: str) -
         )
         
         # Log the raw content for debugging
-        requirements_logger.log_structured(
-            level="DEBUG",
-            message="Raw LLM response content",
-            extra={
-                "raw_content": content_str[:1000] if content_str else "No content",  # First 1000 chars
-                "resource_name": terraform_resource_name
-            }
-        )
+        # requirements_logger.log_structured(
+        #     level="DEBUG",
+        #     message="Raw LLM response content",
+        #     extra={
+        #         "raw_content": content_str[:1000] if content_str else "No content",  # First 1000 chars
+        #         "resource_name": terraform_resource_name
+        #     }
+        # )
         
         # Parse the result using the TerraformResourceSpecification parser
         parsed_result = _terraform_resource_attributes_parser.parse(content_str)
@@ -844,7 +853,7 @@ def create_requirements_analyzer_react_agent(state: PlannerSupervisorState, conf
             }
         )
         
-        llm = _model_higher  # Reuse the globally initialized model
+        llm = _model  # Reuse the globally initialized model
         
         # Create React agent with async tools
         requirements_logger.log_structured(

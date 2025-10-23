@@ -35,22 +35,46 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 class AgentColor(Enum):
-    PLANNER_SUPERVISOR = Fore.LIGHTGREEN_EX
-    GENERATOR = Fore.YELLOW
-    WEBSEARCH = Fore.LIGHTGREEN_EX
-    ROUTER = Fore.MAGENTA
-    REVIEWER = Fore.CYAN
-    REVISOR = Fore.LIGHTWHITE_EX
-    MASTER = Fore.LIGHTYELLOW_EX
-    SEARCHER = Fore.LIGHTGREEN_EX
-    SUPERVISOR = Fore.LIGHTRED_EX
-    SUPERVISOR_ADAPTER = Fore.LIGHTMAGENTA_EX
+    # Planner/Orchestration Components (Green Family)
+    PLANNER_SUPERVISOR = Fore.GREEN
+    PLANNER_SUPERVISOR_STATE = Fore.LIGHTGREEN_EX
+    PLANNER_HANDOFF_TOOLS = Fore.LIGHTGREEN_EX
+    EXECUTION_PLANNER_REACT = Fore.LIGHTGREEN_EX
+    REQUIREMENTS_ANALYZER_REACT = Fore.LIGHTGREEN_EX
+    PLANNER_AGENT = Fore.GREEN
+    MODIFICATION_PLANNER = Fore.LIGHTGREEN_EX
+    
+    # Generator/Processing Components (Yellow/Magenta Family)
+    GENERATOR_SWARM = Fore.YELLOW
+    GENERATOR_STAGE_HANDOFF_MANAGER = Fore.LIGHTYELLOW_EX
+    GENERATOR_HANDOFF = Fore.MAGENTA
+    BACKEND_GENERATOR = Fore.CYAN
+    DATA_GENERATOR = Fore.LIGHTMAGENTA_EX
+    LOCAL_GENERATOR = Fore.LIGHTYELLOW_EX
+    OUTPUT_GENERATOR = Fore.LIGHTMAGENTA_EX
+    README_GENERATOR = Fore.LIGHTMAGENTA_EX
+    VARIABLE_GENERATOR = Fore.LIGHTMAGENTA_EX
+    RESOURCE_GENERATOR = Fore.LIGHTMAGENTA_EX
+    
+    # Infrastructure/Server Components (Blue Family)
     AWS_ORCHESTRATOR_SERVER = Fore.LIGHTBLUE_EX
-    A2A_EXECUTOR = Fore.LIGHTYELLOW_EX
-    PLANNER_AGENT = Fore.LIGHTBLUE_EX
-    NEW_INFRA_SUBGRAPH = Fore.LIGHTGREEN_EX
-    MODIFICATION_PLANNER = Fore.LIGHTMAGENTA_EX
+    A2A_EXECUTOR = Fore.BLUE
+    SUPERVISOR = Fore.LIGHTBLUE_EX
+    SUPERVISOR_HANDOFF = Fore.LIGHTBLUE_EX
+    # Writer/Output Components (Magenta Family)
+    WRITER_REACT_AGENT = Fore.MAGENTA
+    SUPERVISOR_ADAPTER = Fore.LIGHTMAGENTA_EX
+    GENERIC_AGENT_EXECUTOR = Fore.LIGHTMAGENTA_EX
+    # Base/Default
     BASE = Fore.WHITE
+
+class LogLevelColor(Enum):
+    """Enterprise-standard log level colors following traffic light semantics."""
+    DEBUG = Fore.LIGHTBLACK_EX      # Gray - Low priority
+    INFO = Fore.BLUE                # Blue - Normal operation
+    WARNING = Fore.YELLOW           # Yellow - Potential issues
+    ERROR = Fore.RED               # Red - Operation failed
+    CRITICAL = Fore.LIGHTRED_EX    # Bright Red - System failure
 
 class LogLevel(Enum):
     DEBUG = "DEBUG"
@@ -105,6 +129,13 @@ class AgentLogger:
             return AgentColor[agent].value
         except KeyError:
             return AgentColor.BASE.value
+    
+    def _get_level_color(self, level: str) -> str:
+        """Get color for log level."""
+        try:
+            return LogLevelColor[level].value
+        except KeyError:
+            return Fore.WHITE
             
     def _format_log_entry(self, message: str, level: str = "INFO") -> Dict[str, Any]:
         """Format log entry."""
@@ -118,8 +149,12 @@ class AgentLogger:
     def _log_to_console(self, message: str, level: str = "INFO") -> None:
         """Log to console with color, if enabled."""
         if self.log_to_console:
-            color = self._get_color(self.agent_name)
-            print(f"{color}{message}{Style.RESET_ALL}")
+            agent_color = self._get_color(self.agent_name)
+            level_color = self._get_level_color(level)
+            # Format: [LEVEL] AGENT: [timestamp] message (clean format with timestamp)
+            timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+00:00"
+            formatted_message = f"{level_color}[{level}]{Style.RESET_ALL} {agent_color}{self.agent_name}{Style.RESET_ALL}: [{timestamp}] {message}"
+            print(formatted_message)
         
     def _log_to_file(self, message: str, level: str = "INFO") -> None:
         """Log to file, if enabled."""
@@ -192,9 +227,6 @@ class AgentLogger:
         else:
             # Compose a readable string with all fields
             parts = [
-                f"[{log_entry['timestamp']}]",
-                f"{log_entry.get('agent_name', '')}",
-                f"[{level}]",
                 message,
                 f"task_id={task_id}" if task_id else "",
                 f"context_id={context_id}" if context_id else ""

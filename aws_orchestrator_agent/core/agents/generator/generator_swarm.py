@@ -104,7 +104,7 @@ class GeneratorSwarmAgent(BaseSubgraphAgent):
             }
         )
         
-        # Get LLM configuration from centralized config
+        # # Get LLM configuration from centralized config
         llm_config = self.config_instance.get_llm_config()
         
         generator_swarm_logger.log_structured(
@@ -134,6 +134,14 @@ class GeneratorSwarmAgent(BaseSubgraphAgent):
                 max_tokens=llm_higher_config['max_tokens']
             )
 
+            llm_react_config = self.config_instance.get_llm_react_config()
+            self.model_react = LLMProvider.create_llm(
+                provider=llm_react_config['provider'],
+                model=llm_react_config['model'],
+                temperature=llm_react_config['temperature'],
+                max_tokens=llm_react_config['max_tokens']
+            )
+            
             generator_swarm_logger.log_structured(
                 level="INFO",
                 message="LLM model initialized successfully",
@@ -352,7 +360,7 @@ class GeneratorSwarmAgent(BaseSubgraphAgent):
         
         # Create the agent with extended execution limits
         agent = create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 # State injection is now handled automatically by agent wrappers
                 generate_terraform_resources,  # Main tool that uses InjectedState
@@ -423,6 +431,8 @@ From the message history and shared state, determine:
 4. **Handoff**: If dependencies found, handoff to appropriate agent by priority
 5. **Complete**: If no dependencies and successful generation, call completion tool
 
+**CRITICAL**: Always use your `generate_terraform_resources` tool to execute requests and detect dependencies. NEVER manually analyze or guess dependencies - let the tool do the work.
+
 ## LOOP PREVENTION
 Before taking any action:
 1. **Count repeated actions** in recent messages
@@ -473,16 +483,46 @@ If you encounter errors:
 3. **Update shared state** with error status
 4. **Never retry indefinitely**
 
+## HANDOFF CONTEXT HANDLING
+**When you receive handoff context with dependency_data:**
+- These are RESOURCES THAT NEED TO BE GENERATED, not already resolved
+- Example: If you see AWS resource types in dependency_data, you need to GENERATE these resources
+- The handoff is asking you to CREATE these resources, not acknowledging they exist
+- **ACTION REQUIRED**: When you receive a handoff, immediately call your `generate_terraform_resources` tool to create the resources
+
 ## DECISION MATRIX
-**IMPORTANT**: If `generate_terraform_resources` returns multiple handoff_recommendations, process them sequentially:
-- **First turn**: Handle ONLY the highest priority recommendation
-- **Next turn**: Handle the next highest priority recommendation  
-- **Continue**: Until all dependencies resolved
+**CRITICAL - ONE TOOL CALL PER TURN**: You can ONLY make ONE handoff tool call per turn. NEVER make multiple tool calls simultaneously.
+
+**When `generate_terraform_resources` returns multiple handoff_recommendations:**
+1. **Identify the highest priority agent** from the recommendations
+2. **Consolidate ALL dependencies** for that agent type into a single handoff
+3. **Make ONLY ONE handoff call** to that highest priority agent
+4. **Stop and wait** - the next turn will handle the next priority agent
+
+**Priority Order (handle highest first):**
+- Priority 5: Variables → `handoff_to_variable_definition_agent`
+- Priority 4: Local values → `handoff_to_local_values_agent`  
+- Priority 3: Data sources → `handoff_to_data_source_agent`
+- Priority 2: Outputs → `handoff_to_output_definition_agent`
+
+**Consolidation Rules:**
+- If multiple variable dependencies found → Combine ALL variables into ONE `handoff_to_variable_definition_agent` call
+- If multiple local value dependencies found → Combine ALL local values into ONE `handoff_to_local_values_agent` call
+- If multiple data source dependencies found → Combine ALL data sources into ONE `handoff_to_data_source_agent` call
+
+**Example - If you need variables, local values, AND data sources:**
+- **Turn 1**: Handoff to variable agent with ALL variables (highest priority)
+- **Turn 2**: Handoff to local values agent with ALL local values (next priority)
+- **Turn 3**: Handoff to data source agent with ALL data sources (lowest priority)
+
+**NEVER do this:** Making 3 handoff calls in one turn ❌
+**ALWAYS do this:** Making 1 handoff call per turn, highest priority first ✅
 
 **Handoff Logic**:
-- Variables needed → Variable agent handoff
-- Local values needed → Local values agent handoff  
-- Data sources needed → Data source agent handoff
+- Variables needed → ONE call to variable agent, then STOP
+- Local values needed → ONE call to local values agent, then STOP
+- Data sources needed → ONE call to data source agent, then STOP
+- Outputs needed → ONE call to output definition agent, then STOP
 - No dependencies → Complete task
 
 **START NOW**: Analyze your message history first, then take appropriate action based on what has already been completed.
@@ -507,7 +547,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_variables,  # Core function
                 self.handoff_manager.create_dependency_aware_handoff_tool(
@@ -576,6 +616,8 @@ From the message history and shared state, determine:
 4. **Handoff**: If dependencies found, handoff to appropriate agent by priority
 5. **Complete**: If no dependencies and successful generation, call completion tool
 
+**CRITICAL**: Always use your `generate_terraform_variables` tool to execute requests and detect dependencies. NEVER manually analyze or guess dependencies - let the tool do the work.
+
 ## LOOP PREVENTION
 Before taking any action:
 1. **Count repeated actions** in recent messages
@@ -637,17 +679,34 @@ If you encounter errors:
 - These are VARIABLES THAT NEED TO BE GENERATED, not already resolved
 - Example: If you see `"var.cidr_block"` in dependency_data, you need to GENERATE this variable
 - The handoff is asking you to CREATE these variables, not acknowledging they exist
+- **ACTION REQUIRED**: When you receive a handoff, immediately call your `generate_terraform_variables` tool to create the variables
 
 ## DECISION MATRIX
-**IMPORTANT**: If `generate_terraform_variables` returns multiple handoff_recommendations, process them sequentially:
-- **First turn**: Handle ONLY the highest priority recommendation
-- **Next turn**: Handle the next highest priority recommendation  
-- **Continue**: Until all dependencies resolved
+**CRITICAL - ONE TOOL CALL PER TURN**: You can ONLY make ONE handoff tool call per turn. NEVER make multiple tool calls simultaneously.
+
+**When `generate_terraform_variables` returns multiple handoff_recommendations:**
+1. **Identify the highest priority agent** from the recommendations
+2. **Consolidate ALL dependencies** for that agent type into a single handoff
+3. **Make ONLY ONE handoff call** to that highest priority agent
+4. **Stop and wait** - the next turn will handle the next priority agent
+
+**Priority Order (handle highest first):**
+- Priority 5: Resources → `handoff_to_resource_configuration_agent`
+- Priority 4: Local values → `handoff_to_local_values_agent`
+- Priority 3: Data sources → `handoff_to_data_source_agent`
+
+**Consolidation Rules:**
+- If multiple resource dependencies found → Combine ALL resources into ONE `handoff_to_resource_configuration_agent` call
+- If multiple local value dependencies found → Combine ALL local values into ONE `handoff_to_local_values_agent` call
+- If multiple data source dependencies found → Combine ALL data sources into ONE `handoff_to_data_source_agent` call
+
+**NEVER do this:** Making multiple handoff calls in one turn ❌
+**ALWAYS do this:** Making 1 handoff call per turn, highest priority first ✅
 
 **Handoff Logic**:
-- Resources needed → Resource agent handoff
-- Local values needed → Local values agent handoff  
-- Data sources needed → Data source agent handoff
+- Resources needed → ONE call to resource agent, then STOP
+- Local values needed → ONE call to local values agent, then STOP
+- Data sources needed → ONE call to data source agent, then STOP
 - No dependencies → Complete task
 
 **START NOW**: Analyze your message history first, then take appropriate action based on what has already been completed.
@@ -665,7 +724,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_data_sources,  # Core function
                 self.handoff_manager.create_dependency_aware_handoff_tool(
@@ -733,6 +792,8 @@ From the message history and shared state, determine:
 4. **Handoff**: If dependencies found, handoff to appropriate agent by priority
 5. **Complete**: If no dependencies and successful generation, call completion tool
 
+**CRITICAL**: Always use your `generate_terraform_data_sources` tool to execute requests and detect dependencies. NEVER manually analyze or guess dependencies - let the tool do the work.
+
 ## LOOP PREVENTION
 Before taking any action:
 1. **Count repeated actions** in recent messages
@@ -752,6 +813,27 @@ Process dependencies by priority (handle one per turn if multiple):
 - **Priority 5 (Critical)**: Variables → `handoff_to_variable_definition_agent` (blocking)
 - **Priority 4 (High)**: Resources → `handoff_to_resource_configuration_agent` (blocking)
 - **Priority 3 (Medium)**: Local values → `handoff_to_local_values_agent` (non-blocking)
+
+**CRITICAL - ONE TOOL CALL PER TURN**: You can ONLY make ONE handoff tool call per turn. NEVER make multiple tool calls simultaneously.
+
+**When `generate_terraform_data_sources` returns multiple handoff_recommendations:**
+1. **Identify the highest priority agent** from the recommendations
+2. **Consolidate ALL dependencies** for that agent type into a single handoff
+3. **Make ONLY ONE handoff call** to that highest priority agent
+4. **Stop and wait** - the next turn will handle the next priority agent
+
+**Priority Order (handle highest first):**
+- Priority 5: Variables → `handoff_to_variable_definition_agent`
+- Priority 4: Resources → `handoff_to_resource_configuration_agent`
+- Priority 3: Local values → `handoff_to_local_values_agent`
+
+**Consolidation Rules:**
+- If multiple variable dependencies found → Combine ALL variables into ONE `handoff_to_variable_definition_agent` call
+- If multiple resource dependencies found → Combine ALL resources into ONE `handoff_to_resource_configuration_agent` call
+- If multiple local value dependencies found → Combine ALL local values into ONE `handoff_to_local_values_agent` call
+
+**NEVER do this:** Making multiple handoff calls in one turn ❌
+**ALWAYS do this:** Making 1 handoff call per turn, highest priority first ✅
 
 ## COMPLETION DETECTION
 Call `data_source_agent_complete_task` when:
@@ -776,6 +858,13 @@ If you encounter errors:
 3. **Update shared state** with error status
 4. **Never retry indefinitely**
 
+## HANDOFF CONTEXT HANDLING
+**When you receive handoff context with dependency_data:**
+- These are DATA SOURCES THAT NEED TO BE GENERATED, not already resolved
+- Example: If you see `"aws_kms_key"` or `"aws_iam_role"` in dependency_data, you need to GENERATE these data sources
+- The handoff is asking you to CREATE these data sources, not acknowledging they exist
+- **ACTION REQUIRED**: When you receive a handoff, immediately call your `generate_terraform_data_sources` tool to create the data sources
+
 **START NOW**: Analyze your message history first, then take appropriate action based on what has already been completed.
 """),
     MessagesPlaceholder(variable_name="messages")
@@ -791,7 +880,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_local_values,  # Core function
                 self.handoff_manager.create_dependency_aware_handoff_tool(
@@ -859,6 +948,8 @@ From the message history and shared state, determine:
 4. **Handoff**: If dependencies found, handoff to appropriate agent by priority
 5. **Complete**: If no dependencies and successful generation, call completion tool
 
+**CRITICAL**: Always use your `generate_terraform_local_values` tool to execute requests and detect dependencies. NEVER manually analyze or guess dependencies - let the tool do the work.
+
 ## LOOP PREVENTION
 Before taking any action:
 1. **Count repeated actions** in recent messages
@@ -878,6 +969,27 @@ Process dependencies by priority (handle one per turn if multiple):
 - **Priority 5 (Critical)**: Variables → `handoff_to_variable_definition_agent` (blocking)
 - **Priority 4 (High)**: Resources → `handoff_to_resource_configuration_agent` (blocking)
 - **Priority 3 (Medium)**: Data sources → `handoff_to_data_source_agent` (non-blocking)
+
+**CRITICAL - ONE TOOL CALL PER TURN**: You can ONLY make ONE handoff tool call per turn. NEVER make multiple tool calls simultaneously.
+
+**When `generate_terraform_local_values` returns multiple handoff_recommendations:**
+1. **Identify the highest priority agent** from the recommendations
+2. **Consolidate ALL dependencies** for that agent type into a single handoff
+3. **Make ONLY ONE handoff call** to that highest priority agent
+4. **Stop and wait** - the next turn will handle the next priority agent
+
+**Priority Order (handle highest first):**
+- Priority 5: Variables → `handoff_to_variable_definition_agent`
+- Priority 4: Resources → `handoff_to_resource_configuration_agent`
+- Priority 3: Data sources → `handoff_to_data_source_agent`
+
+**Consolidation Rules:**
+- If multiple variable dependencies found → Combine ALL variables into ONE `handoff_to_variable_definition_agent` call
+- If multiple resource dependencies found → Combine ALL resources into ONE `handoff_to_resource_configuration_agent` call
+- If multiple data source dependencies found → Combine ALL data sources into ONE `handoff_to_data_source_agent` call
+
+**NEVER do this:** Making multiple handoff calls in one turn ❌
+**ALWAYS do this:** Making 1 handoff call per turn, highest priority first ✅
 
 ## COMPLETION DETECTION
 Call `local_values_agent_complete_task` when:
@@ -902,6 +1014,13 @@ If you encounter errors:
 3. **Update shared state** with error status
 4. **Never retry indefinitely**
 
+## HANDOFF CONTEXT HANDLING
+**When you receive handoff context with dependency_data:**
+- These are LOCAL VALUES THAT NEED TO BE GENERATED, not already resolved
+- Example: If you see `"bucket_name_final"` or `"tags_all"` in dependency_data, you need to GENERATE these local values
+- The handoff is asking you to CREATE these local values, not acknowledging they exist
+- **ACTION REQUIRED**: When you receive a handoff, immediately call your `generate_terraform_local_values` tool to create the local values
+
 **START NOW**: Analyze your message history first, then take appropriate action based on what has already been completed.
 """),
     MessagesPlaceholder(variable_name="messages")
@@ -917,7 +1036,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_outputs,  # Core function
                 self.handoff_manager.create_dependency_aware_handoff_tool(
@@ -986,6 +1105,8 @@ From the message history and shared state, determine:
 4. **Handoff**: If dependencies found, handoff to appropriate agent by priority
 5. **Complete**: If no dependencies and successful generation, call completion tool
 
+**CRITICAL**: Always use your `generate_terraform_outputs` tool to execute requests and detect dependencies. NEVER manually analyze or guess dependencies - let the tool do the work.
+
 ## LOOP PREVENTION
 Before taking any action:
 1. **Count repeated actions** in recent messages
@@ -1006,6 +1127,29 @@ Process dependencies by priority (handle one per turn if multiple):
 - **Priority 4 (High)**: Variables → `handoff_to_variable_definition_agent` (blocking)
 - **Priority 3 (Medium)**: Local values → `handoff_to_local_values_agent` (blocking)
 - **Priority 2 (Low)**: Data sources → `handoff_to_data_source_agent` (non-blocking)
+
+**CRITICAL - ONE TOOL CALL PER TURN**: You can ONLY make ONE handoff tool call per turn. NEVER make multiple tool calls simultaneously.
+
+**When `generate_terraform_outputs` returns multiple handoff_recommendations:**
+1. **Identify the highest priority agent** from the recommendations
+2. **Consolidate ALL dependencies** for that agent type into a single handoff
+3. **Make ONLY ONE handoff call** to that highest priority agent
+4. **Stop and wait** - the next turn will handle the next priority agent
+
+**Priority Order (handle highest first):**
+- Priority 5: Resources → `handoff_to_resource_configuration_agent`
+- Priority 4: Variables → `handoff_to_variable_definition_agent`
+- Priority 3: Local values → `handoff_to_local_values_agent`
+- Priority 2: Data sources → `handoff_to_data_source_agent`
+
+**Consolidation Rules:**
+- If multiple resource dependencies found → Combine ALL resources into ONE `handoff_to_resource_configuration_agent` call
+- If multiple variable dependencies found → Combine ALL variables into ONE `handoff_to_variable_definition_agent` call
+- If multiple local value dependencies found → Combine ALL local values into ONE `handoff_to_local_values_agent` call
+- If multiple data source dependencies found → Combine ALL data sources into ONE `handoff_to_data_source_agent` call
+
+**NEVER do this:** Making multiple handoff calls in one turn ❌
+**ALWAYS do this:** Making 1 handoff call per turn, highest priority first ✅
 
 ## COMPLETION DETECTION
 Call `output_definition_agent_complete_task` when:
@@ -1030,6 +1174,13 @@ If you encounter errors:
 3. **Update shared state** with error status
 4. **Never retry indefinitely**
 
+## HANDOFF CONTEXT HANDLING
+**When you receive handoff context with dependency_data:**
+- These are OUTPUTS THAT NEED TO BE GENERATED, not already resolved
+- Example: If you see `"bucket_id"` or `"bucket_arn"` in dependency_data, you need to GENERATE these outputs
+- The handoff is asking you to CREATE these outputs, not acknowledging they exist
+- **ACTION REQUIRED**: When you receive a handoff, immediately call your `generate_terraform_outputs` tool to create the outputs
+
 **START NOW**: Analyze your message history first, then take appropriate action based on what has already been completed.
 """),
     MessagesPlaceholder(variable_name="messages")
@@ -1045,7 +1196,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_backend,  # Core function
                 create_completion_handoff_tool("terraform_backend_generator")
@@ -1122,7 +1273,7 @@ If you encounter errors:
         )
         
         return create_react_agent(
-            model=self.model,
+            model=self.model_react,
             tools=[
                 generate_terraform_readme,  # Core function
                 create_completion_handoff_tool("terraform_readme_generator")

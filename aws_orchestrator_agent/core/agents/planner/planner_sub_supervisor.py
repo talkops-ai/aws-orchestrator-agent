@@ -99,6 +99,7 @@ class PlannerSubSupervisorAgent(BaseSubgraphAgent):
         
         # Get LLM configuration from centralized config
         llm_config = self.config_instance.get_llm_config()
+        llm_react_config = self.config_instance.get_llm_react_config()
         
         planner_supervisor_logger.log_structured(
             level="DEBUG",
@@ -127,6 +128,12 @@ class PlannerSubSupervisorAgent(BaseSubgraphAgent):
                     "llm_model": llm_config['model'],
                     "model_type": type(self.model).__name__
                 }
+            )
+            self.model_react = LLMProvider.create_llm(
+                provider=llm_react_config['provider'],
+                model=llm_react_config['model'],
+                temperature=llm_react_config['temperature'],
+                max_tokens=llm_react_config['max_tokens']
             )
         except Exception as e:
             planner_supervisor_logger.log_structured(

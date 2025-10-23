@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional
 from langchain_core.tools import tool
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser, PydanticOutputParser
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 import re
 from langgraph.prebuilt import create_react_agent
@@ -28,8 +28,6 @@ from aws_orchestrator_agent.core.agents.planner.planner_supervisor_state import 
 from .execution_planner_prompt import (
     TF_MODULE_STRUCTURE_PLAN_SYSTEM_PROMPT,
     TF_MODULE_STRUCTURE_PLAN_USER_PROMPT,
-    TF_MODULE_REACT_AGENT_SYSTEM_PROMPT,
-    TF_MODULE_REACT_AGENT_USER_PROMPT,
     TF_CONFIGURATION_OPTIMIZER_SYSTEM_PROMPT,
     TF_CONFIGURATION_OPTIMIZER_USER_PROMPT,
     TF_STATE_MGMT_SYSTEM_PROMPT,
@@ -46,6 +44,7 @@ execution_logger = AgentLogger("EXECUTION_PLANNER_REACT")
 # Global variables for LLM and parsers
 _model = None
 _model_higher = None
+_model_react = None
 _module_structure_plan_parser = None
 _module_react_agent_parser = None
 _configuration_optimizer_parser = None
@@ -423,7 +422,7 @@ class ExecutionPlanResponseList(BaseModel):
 
 def _initialize_execution_tools(config: Config):
     """Initialize LLM and parsers for execution tools."""
-    global _model, _model_higher, _module_structure_plan_parser, _module_react_agent_parser, _configuration_optimizer_parser, _state_mgmt_parser, _execution_planner_parser
+    global _model, _model_higher, _model_react, _module_structure_plan_parser, _module_react_agent_parser, _configuration_optimizer_parser, _state_mgmt_parser, _execution_planner_parser
     
     if _model is None:
         llm_config = config.get_llm_config()
@@ -440,10 +439,17 @@ def _initialize_execution_tools(config: Config):
             temperature=llm_higher_config['temperature'],
             max_tokens=llm_higher_config['max_tokens']
         )
-        _module_structure_plan_parser = JsonOutputParser(pydantic_object=ModuleStructurePlanResponse)
-        _configuration_optimizer_parser = JsonOutputParser(pydantic_object=ConfigurationOptimizerResponse)
-        _state_mgmt_parser = JsonOutputParser(pydantic_object=StateManagementPlannerResponse)
-        _execution_planner_parser = JsonOutputParser(pydantic_object=ComprehensiveExecutionPlanResponse)
+        llm_react_config = config.get_llm_react_config()
+        _model_react = LLMProvider.create_llm(
+            provider=llm_react_config['provider'],
+            model=llm_react_config['model'],
+            temperature=llm_react_config['temperature'],
+            max_tokens=llm_react_config['max_tokens']
+        )
+        _module_structure_plan_parser = PydanticOutputParser(pydantic_object=ModuleStructurePlanResponse)
+        _configuration_optimizer_parser = PydanticOutputParser(pydantic_object=ConfigurationOptimizerResponse)
+        _state_mgmt_parser = PydanticOutputParser(pydantic_object=StateManagementPlannerResponse)
+        _execution_planner_parser = PydanticOutputParser(pydantic_object=ComprehensiveExecutionPlanResponse)
         
         
 
@@ -564,6 +570,130 @@ def extract_aws_service_names(aws_service_mapping):
             }
         )
         return []
+
+def find_matching_service_name(service_name, service_list):
+    """
+    Find matching service name in service_list using regex/string matching.
+    
+    Args:
+        service_name: Short service name (e.g., 's3', 'vpc', 'rds')
+        service_list: List of full AWS service names (e.g., ['Amazon S3', 'Amazon VPC', 'Amazon RDS'])
+        
+    Returns:
+        Matching service name from service_list, or original service_name if no match found
+    """
+    try:
+        import re
+        
+        # Convert service_name to lowercase for case-insensitive matching
+        service_name_lower = service_name.lower()
+        
+        # Try exact match first
+        for full_name in service_list:
+            if service_name_lower == full_name.lower():
+                return full_name
+        
+        # Try partial match (service_name is contained in full_name)
+        for full_name in service_list:
+            if service_name_lower in full_name.lower():
+                return full_name
+        
+        # Try reverse partial match (full_name key parts are contained in service_name)
+        for full_name in service_list:
+            # Extract key parts from full name (e.g., "Amazon S3" -> "s3")
+            key_parts = re.findall(r'\b\w+\b', full_name.lower())
+            for part in key_parts:
+                if part in service_name_lower:
+                    return full_name
+        
+        # If no match found, return original service_name
+        execution_logger.log_structured(
+            level="WARNING",
+            message=f"No matching service found for '{service_name}' in service list",
+            extra={
+                "service_name": service_name,
+                "service_list": service_list,
+                "matching_successful": False
+            }
+        )
+        return service_name
+        
+    except Exception as e:
+        execution_logger.log_structured(
+            level="ERROR",
+            message=f"Error finding matching service name for '{service_name}'",
+            extra={
+                "error": str(e),
+                "service_name": service_name,
+                "matching_successful": False
+            }
+        )
+        return service_name
+
+
+def extract_terraform_resource_names_and_arguments(terraform_attribute_mapping, service_name):
+    """
+    Extract terraform resource names and recommended arguments from terraform_attribute_mapping for a specific service.
+    
+    Args:
+        terraform_attribute_mapping: Dictionary containing Terraform attribute mapping data
+        service_name: Specific AWS service name to extract (e.g., 'VPC', 'S3', 'KMS')
+        
+    Returns:
+        List of dictionaries with resource_name and recommended_arguments for each resource
+    """
+    try:
+        # Check if terraform_attribute_mapping is a string and parse it
+        if isinstance(terraform_attribute_mapping, str):
+            terraform_attribute_mapping = json.loads(terraform_attribute_mapping)
+        
+        terraform_resources = []
+        
+        # Extract terraform resources directly from the mapping
+        if 'terraform_resources' in terraform_attribute_mapping:
+            for resource in terraform_attribute_mapping['terraform_resources']:
+                resource_info = {
+                    "resource_name": resource.get('resource_name', ''),
+                    "recommended_arguments": resource.get('recommended_arguments', [])
+                }
+                terraform_resources.append(resource_info)
+            
+            execution_logger.log_structured(
+                level="INFO",
+                message=f"Terraform resource names and arguments extraction completed for {service_name}",
+                extra={
+                    "requested_service": service_name,
+                    "found_service": terraform_attribute_mapping.get('service_name', ''),
+                    "resources_count": len(terraform_resources),
+                    "extraction_successful": True
+                }
+            )
+            
+            return terraform_resources
+        
+        # If service not found, return empty list
+        execution_logger.log_structured(
+            level="WARNING",
+            message=f"Service {service_name} not found in terraform_attribute_mapping",
+            extra={
+                "requested_service": service_name,
+                "extraction_successful": False
+            }
+        )
+        return []
+        
+    except Exception as e:
+        execution_logger.log_structured(
+            level="ERROR",
+            message=f"Error extracting terraform resource names and arguments for {service_name}",
+            extra={
+                "error": str(e),
+                "service_name": service_name,
+                "extraction_successful": False
+            }
+        )
+        return []
+
 
 def extract_terraform_resource_attributes(terraform_attribute_mapping, service_name):
     """
@@ -736,27 +866,46 @@ async def create_module_structure_plan(service_name: str) -> ModuleStructurePlan
         well_architected_alignment = service_data["well_architected_alignment"]
         module_dependencies = service_data["dependencies"]
         terraform_resources = terraform_resource_attributes["terraform_resources"]
-        _module_structure_plan_prompt = ChatPromptTemplate.from_messages([
-            ("system", TF_MODULE_STRUCTURE_PLAN_SYSTEM_PROMPT),
-            ("human", TF_MODULE_STRUCTURE_PLAN_USER_PROMPT)
-        ])
-        formatted_prompt = _module_structure_plan_prompt.format_messages(service_name=service_name, architecture_patterns=architecture_patterns, well_architected_alignment=well_architected_alignment, terraform_resources=terraform_resources, module_dependencies=module_dependencies)
 
-        response = await _model.ainvoke(formatted_prompt)
-        if isinstance(response, AIMessage):
-            content = response.content
-            content_str = str(content) if not isinstance(content, str) else content
-        else:
-            content_str = str(response) if not isinstance(response, str) else response
-
-        module_structure_plan = _module_structure_plan_parser.parse(content_str)
-        execution_logger.log_structured(
-            level="INFO",
-            message="Module structure plan created successfully",
-            extra={
-                "module_structure_plan": module_structure_plan
-            }
+        # Use the template directly with ChatPromptTemplate's variable substitution
+        formatted_user_prompt = TF_MODULE_STRUCTURE_PLAN_USER_PROMPT.format(
+            service_name=service_name, 
+            architecture_patterns=architecture_patterns, 
+            well_architected_alignment=well_architected_alignment, 
+            terraform_resources=terraform_resources, 
+            module_dependencies=module_dependencies
         )
+        
+        # Escape curly braces in the formatted user prompt to prevent ChatPromptTemplate from parsing JSON keys as variables
+        formatted_user_prompt = formatted_user_prompt.replace('{', '{{').replace('}', '}}')
+
+        # Build complete prompt, escaping curly braces in system prompt
+        escaped_system_prompt = TF_MODULE_STRUCTURE_PLAN_SYSTEM_PROMPT.replace('{', '{{').replace('}', '}}')
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", escaped_system_prompt),
+            ("user", formatted_user_prompt),
+            ("user", """Please respond with valid JSON matching the ModuleStructurePlanResponse schema.
+
+IMPORTANT: 
+- Keep the JSON structure simple and valid
+- Use empty arrays [] for lists if no items
+- Use empty strings "" for optional string fields
+- Focus on generating the core module structure first
+- You can return partial results if needed
+
+{format_instructions}""")
+        ]).partial(format_instructions=_module_structure_plan_parser.get_format_instructions())
+
+        # Create and execute chain
+        chain = prompt | _model_higher | _module_structure_plan_parser
+        module_structure_plan = await chain.ainvoke({})
+        # execution_logger.log_structured(
+        #     level="INFO",
+        #     message="Module structure plan created successfully",
+        #     extra={
+        #         "module_structure_plan": module_structure_plan
+        #     }
+        # )
         
         return module_structure_plan
 
@@ -832,13 +981,8 @@ async def create_configuration_optimizer(module_structure_plan: ModuleStructureP
         organization_standards = json.dumps(config.CONFIG_OPTIMIZER_ORGANIZATION_STANDARDS)
         
         # Create prompt template
-        _configuration_optimizer_prompt = ChatPromptTemplate.from_messages([
-            ("system", TF_CONFIGURATION_OPTIMIZER_SYSTEM_PROMPT),
-            ("human", TF_CONFIGURATION_OPTIMIZER_USER_PROMPT)
-        ])
-        
-        # Format the prompt with extracted data
-        formatted_prompt = _configuration_optimizer_prompt.format_messages(
+        # Format the user prompt with extracted data
+        formatted_user_prompt = TF_CONFIGURATION_OPTIMIZER_USER_PROMPT.format(
             service_name=service_name,
             recommended_files=recommended_files,
             variable_definitions=variable_definitions,
@@ -852,38 +996,29 @@ async def create_configuration_optimizer(module_structure_plan: ModuleStructureP
             organization_standards=organization_standards
         )
         
-        # Invoke the model
-        response = await _model.ainvoke(formatted_prompt)
-        if isinstance(response, AIMessage):
-            content = response.content
-            content_str = str(content) if not isinstance(content, str) else content
-        else:
-            content_str = str(response) if not isinstance(response, str) else response
-        
-        # Parse the response
-        try:
-            configuration_optimizer = _configuration_optimizer_parser.parse(content_str)
-        except Exception as parse_error:
-            execution_logger.log_structured(
-                level="WARNING",
-                message="Failed to parse configuration optimizer response, using fallback",
-                extra={"error": str(parse_error), "response_content": content_str[:200] + "..." if len(content_str) > 200 else content_str}
-            )
-            
-            # Create fallback response with error
-            configuration_optimizer = ConfigurationOptimizerResponse(
-                service_name=service_name,
-                cost_optimizations=[],
-                performance_optimizations=[],
-                security_optimizations=[],
-                syntax_validations=[],
-                naming_conventions=[],
-                tagging_strategies=[],
-                estimated_monthly_cost=None,
-                optimization_summary="Fallback summary due to parsing error",
-                implementation_priority=["Review and fix parsing issues"],
-                error=f"Failed to parse configuration optimizer response: {str(parse_error)}"
-            )
+        # Escape curly braces in the formatted user prompt to prevent ChatPromptTemplate from parsing JSON keys as variables
+        formatted_user_prompt = formatted_user_prompt.replace('{', '{{').replace('}', '}}')
+
+        # Build complete prompt, escaping curly braces in system prompt
+        escaped_system_prompt = TF_CONFIGURATION_OPTIMIZER_SYSTEM_PROMPT.replace('{', '{{').replace('}', '}}')
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", escaped_system_prompt),
+            ("user", formatted_user_prompt),
+            ("user", """Please respond with valid JSON matching the ConfigurationOptimizerResponse schema.
+
+IMPORTANT: 
+- Keep the JSON structure simple and valid
+- Use empty arrays [] for lists if no items
+- Use empty strings "" for optional string fields
+- Focus on generating the core optimization recommendations first
+- You can return partial results if needed
+
+{format_instructions}""")
+        ]).partial(format_instructions=_configuration_optimizer_parser.get_format_instructions())
+
+        # Create and execute chain
+        chain = prompt | _model | _configuration_optimizer_parser
+        configuration_optimizer = await chain.ainvoke({})
         
         execution_logger.log_structured(
             level="INFO",
@@ -955,86 +1090,47 @@ async def create_state_mgmt(configuration_optimizer: ConfigurationOptimizerRespo
         # Get configuration values from config
         config = Config()
         
-        _state_mgmt_prompt = ChatPromptTemplate.from_messages([
-            ("system", TF_STATE_MGMT_SYSTEM_PROMPT),
-            ("user", TF_STATE_MGMT_USER_PROMPT)
-        ])
-        # Format the prompt with extracted data and default values
-        formatted_prompt = _state_mgmt_prompt.format_messages(
+        # Format the user prompt with extracted data and default values
+        formatted_user_prompt = TF_STATE_MGMT_USER_PROMPT.format(
             service_name=service_name,
             infrastructure_scale=config.STATE_MGMT_DEFAULT_INFRASTRUCTURE_SCALE,
-            environments=json.dumps(config.STATE_MGMT_DEFAULT_ENVIRONMENTS),
+            environments=config.STATE_MGMT_DEFAULT_ENVIRONMENTS,
             aws_region=config.STATE_MGMT_DEFAULT_AWS_REGION,
             multi_region=config.STATE_MGMT_DEFAULT_MULTI_REGION,
             team_size=config.STATE_MGMT_DEFAULT_TEAM_SIZE,
-            teams=json.dumps(config.STATE_MGMT_DEFAULT_TEAMS),
+            teams=config.STATE_MGMT_DEFAULT_TEAMS,
             concurrent_operations=config.STATE_MGMT_DEFAULT_CONCURRENT_OPERATIONS,
             ci_cd_integration=config.STATE_MGMT_DEFAULT_CI_CD_INTEGRATION,
             encryption_required=config.STATE_MGMT_DEFAULT_ENCRYPTION_REQUIRED,
             audit_logging=config.STATE_MGMT_DEFAULT_AUDIT_LOGGING,
             backup_retention_days=config.STATE_MGMT_DEFAULT_BACKUP_RETENTION_DAYS,
-            compliance_standards=json.dumps(config.STATE_MGMT_DEFAULT_COMPLIANCE_STANDARDS),
+            compliance_standards=config.STATE_MGMT_DEFAULT_COMPLIANCE_STANDARDS,
             existing_state_files="[]"  # Default to empty for new infrastructure
         )
         
-        # Invoke the model
-        response = await _model.ainvoke(formatted_prompt)
-        if isinstance(response, AIMessage):
-            content = response.content
-            content_str = str(content) if not isinstance(content, str) else content
-        else:
-            content_str = str(response) if not isinstance(response, str) else response
-        
-        # Parse the response
-        try:
-            state_mgmt_plan = _state_mgmt_parser.parse(content_str)
-        except Exception as parse_error:
-            execution_logger.log_structured(
-                level="WARNING",
-                message="Failed to parse state management plan response, using fallback",
-                extra={"error": str(parse_error), "response_content": content_str[:200] + "..." if len(content_str) > 200 else content_str}
-            )
-            
-            # Create fallback response with error
-            state_mgmt_plan = StateManagementPlannerResponse(
-                service_name=service_name,
-                infrastructure_scale="medium",
-                backend_configuration=BackendConfiguration(
-                    bucket_name="fallback-bucket",
-                    key_pattern="fallback-pattern",
-                    region="us-east-1",
-                    encrypt=True,
-                    versioning=True,
-                    kms_key_id=None,
-                    server_side_encryption_configuration={}
-                ),
-                state_locking_configuration=StateLockingConfiguration(
-                    table_name="fallback-table",
-                    billing_mode="PAY_PER_REQUEST",
-                    hash_key="LockID",
-                    region="us-east-1",
-                    point_in_time_recovery=True,
-                    tags={}
-                ),
-                state_splitting_strategy=StateSplittingStrategy(
-                    splitting_approach="fallback",
-                    state_files=[],
-                    dependencies=[],
-                    data_source_usage=[]
-                ),
-                security_recommendations=BackendSecurityRecommendations(
-                    iam_policies=[],
-                    bucket_policies=[],
-                    access_controls=[],
-                    monitoring=[]
-                ),
-                migration_plan=[],
-                implementation_steps=["Review and fix parsing issues"],
-                best_practices=["Fallback best practices"],
-                monitoring_setup=["Fallback monitoring"],
-                disaster_recovery=["Fallback disaster recovery"],
-                error=f"Failed to parse state management plan: {str(parse_error)}"
-            )
+        # Escape curly braces in the formatted user prompt to prevent ChatPromptTemplate from parsing JSON keys as variables
+        formatted_user_prompt = formatted_user_prompt.replace('{', '{{').replace('}', '}}')
+
+        # Build complete prompt, escaping curly braces in system prompt
+        escaped_system_prompt = TF_STATE_MGMT_SYSTEM_PROMPT.replace('{', '{{').replace('}', '}}')
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", escaped_system_prompt),
+            ("user", formatted_user_prompt),
+            ("user", """Please respond with valid JSON matching the StateManagementPlannerResponse schema.
+
+IMPORTANT: 
+- Keep the JSON structure simple and valid
+- Use empty arrays [] for lists if no items
+- Use empty strings "" for optional string fields
+- Focus on generating the core state management plan first
+- You can return partial results if needed
+
+{format_instructions}""")
+        ]).partial(format_instructions=_state_mgmt_parser.get_format_instructions())
+
+        # Create and execute chain
+        chain = prompt | _model_higher | _state_mgmt_parser
+        state_mgmt_plan = await chain.ainvoke({})
         
         execution_logger.log_structured(
             level="INFO",
@@ -1099,6 +1195,10 @@ async def create_execution_plan(state_mgmt_plan: StateManagementPlannerResponse)
         if _shared_planner_state is None:
             raise ValueError("Planner state not available. Cannot access planning data.")
         
+        # Extract terraform attribute mapping and aws service mapping
+        aws_service_mapping = _shared_planner_state.requirements_data.aws_service_mapping
+        service_list = extract_aws_service_names(aws_service_mapping)
+        tf_attribute_mapping = _shared_planner_state.requirements_data.terraform_attribute_mapping
         # Extract data from shared planner state
         module_structure_plan = _shared_planner_state.execution_data.module_structure_plan
         configuration_optimizer_data = _shared_planner_state.execution_data.configuration_optimizer_data
@@ -1143,7 +1243,12 @@ async def create_execution_plan(state_mgmt_plan: StateManagementPlannerResponse)
         variable_definitions = json.dumps(matching_module_plan.get("variable_definitions", []))
         output_definitions = json.dumps(matching_module_plan.get("output_definitions", []))
         security_considerations = json.dumps(matching_module_plan.get("security_considerations", []))
+
+        # Find matching service name in service_list using regex/string matching
+        matched_service_name = find_matching_service_name(service_name, service_list)
         
+        terraform_resource_attributes = extract_terraform_resource_attributes(tf_attribute_mapping, matched_service_name)
+        terraform_resource_names_and_arguments = extract_terraform_resource_names_and_arguments(terraform_resource_attributes, matched_service_name)
         # Find matching configuration optimizer data for the service
         matching_config_optimizer = None
         # Extract the list from the dict structure
@@ -1172,19 +1277,23 @@ async def create_execution_plan(state_mgmt_plan: StateManagementPlannerResponse)
         state_splitting_strategy = json.dumps(state_mgmt_plan.state_splitting_strategy.model_dump() if hasattr(state_mgmt_plan.state_splitting_strategy, 'model_dump') else state_mgmt_plan.state_splitting_strategy)
         
         # Set deployment context defaults
-        target_environment = "dev"  # Default environment
+        target_environment = "prod"  # Default environment
         ci_cd_integration = "GitHub Actions"  # Default CI/CD
         parallel_execution = "enabled"  # Default parallel execution
         
         # Create prompt template
-        _execution_planner_prompt = ChatPromptTemplate.from_messages([
-            ("system", TF_EXECUTION_PLANNER_SYSTEM_PROMPT),
-            ("human", TF_EXECUTION_PLANNER_USER_PROMPT)
-        ])
-        
-        # Format the prompt with extracted data
-        formatted_prompt = _execution_planner_prompt.format_messages(
+        def format_data_for_template(data):
+            """Convert data to JSON string for template embedding"""
+            if isinstance(data, str):
+                return data
+            else:
+                # Convert non-string data to JSON string for embedding in template
+                return json.dumps(data)
+
+        # Format the user prompt with extracted data
+        formatted_user_prompt = TF_EXECUTION_PLANNER_USER_PROMPT.format(
             service_name=service_name,
+            terraform_resource_names_and_arguments=terraform_resource_names_and_arguments,
             recommended_files=recommended_files,
             variable_definitions=variable_definitions,
             output_definitions=output_definitions,
@@ -1202,49 +1311,43 @@ async def create_execution_plan(state_mgmt_plan: StateManagementPlannerResponse)
             parallel_execution=parallel_execution
         )
         
-        # Invoke the model
-        response = await _model.ainvoke(formatted_prompt)
-        if isinstance(response, AIMessage):
-            content = response.content
-            content_str = str(content) if not isinstance(content, str) else content
-        else:
-            content_str = str(response) if not isinstance(response, str) else response
-        
-        # Parse the response
-        try:
-            repaired_content = json_repair.repair_json(content_str)
-            execution_plan = _execution_planner_parser.parse(repaired_content)
-        except Exception as parse_error:
-            execution_logger.log_structured(
-                level="WARNING",
-                message="Failed to parse execution plan response, using fallback",
-                extra={"error": str(parse_error), "response_content": content_str[:200] + "..." if len(content_str) > 200 else content_str}
-            )
-            
-            # Create fallback response with error
-            execution_plan = ComprehensiveExecutionPlanResponse(
-                service_name=service_name,
-                module_name=f"{service_name}-module",
-                target_environment=target_environment,
-                plan_generation_timestamp=datetime.now().isoformat(),
-                terraform_files=[],
-                variable_definitions=[],
-                local_values=[],
-                data_sources=[],
-                resource_configurations=[],
-                iam_policies=[],
-                output_definitions=[],
-                usage_examples=[],
-                module_description="Fallback module description due to parsing error",
-                readme_content="Fallback README content due to parsing error",
-                required_providers={},
-                terraform_version_constraint=">=1.0",
-                resource_dependencies=[],
-                deployment_phases=[],
-                estimated_costs={},
-                validation_and_testing=[],
-                error=f"Failed to parse execution plan: {str(parse_error)}"
-            )
+        # Escape curly braces in the formatted user prompt to prevent ChatPromptTemplate from parsing JSON keys as variables
+        formatted_user_prompt = formatted_user_prompt.replace('{', '{{').replace('}', '}}')
+
+        # Build complete prompt, escaping curly braces in system prompt
+        escaped_system_prompt = TF_EXECUTION_PLANNER_SYSTEM_PROMPT.replace('{', '{{').replace('}', '}}')
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", escaped_system_prompt),
+            ("user", formatted_user_prompt),
+            ("user", """Please respond with valid JSON matching the ComprehensiveExecutionPlanResponse schema.
+
+CRITICAL REQUIREMENTS:
+- MANDATORY: Use ALL terraform_resource_names_and_arguments to create comprehensive resource configurations
+- MANDATORY: Include ALL variable_definitions in the execution plan
+- MANDATORY: Integrate cost_optimizations, performance_optimizations, security_optimizations into actual resource configurations
+- MANDATORY: Apply naming_conventions and tagging_strategies to all resources
+- MANDATORY: Reference backend_configuration and state_splitting_strategy in module design
+- MANDATORY: Use security_considerations to enhance resource configurations and IAM policies
+- MANDATORY: Create resource configurations for ALL resources listed in terraform_resource_names_and_arguments
+- MANDATORY: Apply optimization data to actual resource configurations, not just as recommendations
+- MANDATORY: Generate comprehensive local values for computed values, transformations, and business logic
+- MANDATORY: Create data sources for external dependencies, existing resources, and cross-service references
+
+JSON STRUCTURE REQUIREMENTS:
+- Keep the JSON structure simple and valid
+- Use empty arrays [] for lists if no items
+- Use empty strings "" for optional string fields
+- ALL output fields must be present and justified
+- Each resource configuration must use the recommended_arguments from terraform_resource_names_and_arguments
+- Each variable must be included from variable_definitions
+- Optimization data must be integrated into actual configurations
+
+{format_instructions}""")
+        ]).partial(format_instructions=_execution_planner_parser.get_format_instructions())
+
+        # Create and execute chain
+        chain = prompt | _model_react | _execution_planner_parser
+        execution_plan = await chain.ainvoke({})
         
         execution_logger.log_structured(
             level="INFO",
@@ -1311,8 +1414,6 @@ async def create_module_structure_plan_tool() -> ModuleStructurePlanResponseList
         for service in service_list:
             try:
                 result = await create_module_structure_plan(service)
-                if isinstance(result, dict):
-                    result = ModuleStructurePlanResponse(**result)
                 results.append(result)
             except Exception as e:
                 execution_logger.log_structured(
@@ -1450,8 +1551,6 @@ async def create_configuration_optimizations_tool(module_plans: str) -> Configur
             if isinstance(plan, dict):
                 plan = ModuleStructurePlanResponse(**plan)
             result = await create_configuration_optimizer(plan)
-            if isinstance(result, dict):
-                result = ConfigurationOptimizerResponse(**result)
             results.append(result)
         except Exception as e:
             execution_logger.log_structured(
@@ -1573,8 +1672,6 @@ async def create_state_management_plans_tool(optimizations: str) -> StateManagem
             if isinstance(optimization, dict):
                 optimization = ConfigurationOptimizerResponse(**optimization)
             result = await create_state_mgmt(optimization)
-            if isinstance(result, dict):
-                result = StateManagementPlannerResponse(**result)
             results.append(result)
         except Exception as e:
             execution_logger.log_structured(
@@ -1726,8 +1823,6 @@ async def create_execution_plan_tool(state_mgmt_plans: str) -> ExecutionPlanResp
             if isinstance(state_mgmt_plan, dict):
                 state_mgmt_plan = StateManagementPlannerResponse(**state_mgmt_plan)
             result = await create_execution_plan(state_mgmt_plan)
-            if isinstance(result, dict):
-                result = ComprehensiveExecutionPlanResponse(**result)
             results.append(result)
         except Exception as e:
             execution_logger.log_structured(
@@ -1854,7 +1949,7 @@ def create_execution_planner_react_agent(state: PlannerSupervisorState, config: 
         
         _initialize_execution_tools(config)
         
-        llm = _model_higher  # Use the higher-tier model for agent tasks
+        llm = _model  # Use the higher-tier model for agent tasks
         # Create React agent with async tools
         execution_logger.log_structured(
             level="DEBUG",

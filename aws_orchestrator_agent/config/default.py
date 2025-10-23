@@ -9,11 +9,16 @@ class DefaultConfig:
     # Higher LLM Configuration (for complex reasoning tasks)
     LLM_HIGHER_PROVIDER: str = "openai"
     LLM_HIGHER_MODEL: str = "gpt-5-mini"
-    LLM_HIGHER_TEMPERATURE: float = 1
+    LLM_HIGHER_TEMPERATURE: float = 1.0
     LLM_HIGHER_MAX_TOKENS: int = 15000
 
+    LLM_REACT_AGENT_PROVIDER: str = "openai"
+    LLM_REACT_AGENT_MODEL: str = "gpt-4.1-mini"
+    LLM_REACT_AGENT_TEMPERATURE: float = 0.0
+    LLM_REACT_AGENT_MAX_TOKENS: int = 12000
+
     # Module Configuration
-    MODULE_PATH: str = "/Users/structbinary/Documents/work/talkops/cloudbrain-agents/src/aws-orchestrator-agent"
+    MODULE_PATH: str = "/Users/structbinary/Documents/work/talkops/aws-orchestrator-agent"
     
     # Logging Configuration
     LOG_LEVEL: str = "INFO"

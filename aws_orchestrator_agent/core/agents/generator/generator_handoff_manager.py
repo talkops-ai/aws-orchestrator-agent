@@ -18,7 +18,7 @@ class GeneratorStageHandoffManager:
     """Manages sophisticated handoffs with dependency resolution and context filtering"""
     
     def __init__(self):
-        self.logger = AgentLogger("GeneratorStageHandoffManager")
+        self.logger = AgentLogger("GENERATOR_STAGE_HANDOFF_MANAGER")
         # self.planner_state = get_current_state()
     
     def create_dependency_aware_handoff_tool(
