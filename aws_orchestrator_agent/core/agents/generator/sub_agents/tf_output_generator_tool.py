@@ -69,6 +69,7 @@ class OutputUsageContext(str, Enum):
     AUTOMATION_SCRIPTS = "automation_scripts"     # For CI/CD and scripts
     DEBUGGING_INFO = "debugging_info"             # For troubleshooting
     CONFIGURATION_REFERENCE = "configuration_reference"  # For configuration
+    SECURITY = "security"                         # For security-related outputs
 
 class GeneratorAgentName(str, Enum):
     RESOURCE_CONFIGURATION = "resource_configuration_agent"

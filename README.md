@@ -468,15 +468,6 @@ uv run --active aws-orchestrator-agent \
   --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
 ```
 
-#### Option 2b: Production A2A Server
-```bash
-# Start A2A server with custom configuration
-aws-orchestrator-agent \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json \
-  --config-file config.yaml
-```
 
 #### Option 3: Docker Deployment
 ```bash

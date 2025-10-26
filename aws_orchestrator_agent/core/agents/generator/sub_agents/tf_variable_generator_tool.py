@@ -526,6 +526,13 @@ RESPOND WITH COMPLETE JSON ONLY - NO OTHER TEXT.""")
                 max_tokens=llm_higher_config['max_tokens']
             )
 
+            llm_react_config = config_instance.get_llm_react_config()
+            model_react = LLMProvider.create_llm(
+                provider=llm_react_config['provider'],
+                model=llm_react_config['model'],
+                temperature=llm_react_config['temperature'],
+                max_tokens=llm_react_config['max_tokens']
+            )
             variable_generator_logger.log_structured(
                 level="DEBUG",
                 message="LLM initialized successfully for variable generation",

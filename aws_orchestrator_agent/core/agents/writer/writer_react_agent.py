@@ -722,6 +722,16 @@ TOOLS AVAILABLE:
 
 GUIDELINES:
 - Always validate syntax before writing files
+- **CRITICAL**: If validation detects syntax errors (e.g., mismatched braces, incorrect HCL structure, multiple locals blocks), you MUST:
+  1. Identify the specific syntax issues from the validation error
+  2. Correct the content to fix all validation errors
+  3. Re-validate the corrected content
+  4. Only write the file once validation passes
+- Common Terraform syntax fixes:
+  * Consolidate multiple `locals {{}}` blocks into a single block
+  * Ensure braces are balanced and properly nested
+  * Fix resource/data source attribute syntax
+  * Correct variable and output block structures
 - Create necessary directories first
 - Use batch operations for efficiency when possible
 - Handle errors gracefully and continue with remaining operations

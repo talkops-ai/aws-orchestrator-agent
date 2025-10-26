@@ -4,18 +4,18 @@ class DefaultConfig:
     LLM_PROVIDER: str = "openai"
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_TEMPERATURE: float = 0.0
-    LLM_MAX_TOKENS: int = 12000
+    LLM_MAX_TOKENS: int = 15000
     
     # Higher LLM Configuration (for complex reasoning tasks)
     LLM_HIGHER_PROVIDER: str = "openai"
     LLM_HIGHER_MODEL: str = "gpt-5-mini"
-    LLM_HIGHER_TEMPERATURE: float = 1.0
+    LLM_HIGHER_TEMPERATURE: float = 0.0
     LLM_HIGHER_MAX_TOKENS: int = 15000
 
     LLM_REACT_AGENT_PROVIDER: str = "openai"
     LLM_REACT_AGENT_MODEL: str = "gpt-4.1-mini"
     LLM_REACT_AGENT_TEMPERATURE: float = 0.0
-    LLM_REACT_AGENT_MAX_TOKENS: int = 12000
+    LLM_REACT_AGENT_MAX_TOKENS: int = 25000
 
     # Module Configuration
     MODULE_PATH: str = "/Users/structbinary/Documents/work/talkops/aws-orchestrator-agent"
