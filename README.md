@@ -2,7 +2,7 @@
 
 ## 🚀 Enterprise-Grade Multi-Agent Terraform Module Generation System
 
-A sophisticated, autonomous multi-agent system that generates enterprise-level AWS Terraform modules through intelligent research, analysis, and code generation. Built with LangGraph and advanced AI orchestration patterns for production-ready infrastructure automation.
+**AWS Orchestrator Agent** is a sophisticated, autonomous multi-agent system that generates enterprise-level AWS Terraform modules through intelligent research, deep analysis, and AI-powered code generation. Built with LangGraph and the Google A2A protocol, it leverages advanced AI orchestration patterns to deliver production-ready infrastructure automation through coordinated specialist agents.
 
 ## 🏗️ Architecture Overview
 
@@ -152,28 +152,6 @@ aws-orchestrator-agent \
   --config-file config.yaml
 ```
 
-#### Programmatic A2A Server Setup
-```python
-# A2A Server Setup
-from aws_orchestrator_agent.server import main
-
-# Start A2A server
-main(
-    host="0.0.0.0",
-    port=8000,
-    agent_card="aws_orchestrator_agent/card/aws_orchestrator_agent.json",
-    config_file="config.yaml"
-)
-```
-
-#### Enterprise Agent Ecosystem Benefits
-
-- **🔄 Multi-Agent Coordination**: Seamless integration with other specialized agents
-- **📊 Enterprise State Management**: Robust state orchestration across agent boundaries
-- **🛡️ Protocol Compliance**: Full A2A protocol compliance for enterprise environments
-- **📈 Scalability**: Multiple concurrent workflows with resource management
-- **🔍 Observability**: Complete workflow visibility and progress tracking
-
 ## 🎯 Core Components
 
 ### 1. 🎯 Main Supervisor Agent (`CustomSupervisorAgent`)
@@ -184,7 +162,7 @@ main(
 - **🔄 Autonomous Workflow Orchestration**: Coordinates all sub-agents through intelligent routing
 - **📊 Comprehensive State Management**: Maintains detailed workflow state across all phases
 - **🛡️ Enterprise-Grade Error Handling**: Robust error recovery and retry mechanisms
-- **👤 Human-in-the-Loop**: Interactive clarification for complex requirements
+- **👤 Human-in-the-Loop**: Interactive clarification for complex requirements[To be release on next version]
 - **📈 Real-Time Progress Tracking**: Live workflow progress monitoring and reporting
 - **🔀 Intelligent Agent Routing**: Smart task delegation based on enterprise requirements
 - **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality module generation
@@ -193,7 +171,6 @@ main(
 1. **📋 Deep Research Phase**: Delegates to Planner Sub-Supervisor for comprehensive analysis
 2. **🏭 Autonomous Generation Phase**: Delegates to Generator Swarm for enterprise-grade code generation
 3. **📝 Enterprise Writing Phase**: Delegates to Writer React Agent for production-ready file creation
-4. **✅ Enterprise Validation Phase**: Comprehensive validation and compliance checking
 
 ### 2. 📋 Planner Sub-Supervisor Agent
 
@@ -251,7 +228,7 @@ main(
 - **💾 Enterprise Backup Support**: Automatic backup creation for enterprise file operations
 - **📈 Enterprise Progress Monitoring**: Real-time writing progress tracking for enterprise modules
 
-### 5. ✅ Validation Agent
+### 5. ✅ Validation Agent [Not Integrated - To be released on next version]
 
 **The Enterprise Quality Assurance** - Validates generated Terraform modules for enterprise-grade correctness and best practices.
 
@@ -306,91 +283,224 @@ sequenceDiagram
     
     S->>U: "Enterprise S3 module created successfully!"
     
-    Note over U,S: ⏱️ Time-Intensive Process: 5-15 minutes for enterprise-grade modules
+    Note over U,S: ⏱️ Time-Intensive Process: 20-25 minutes for enterprise-grade modules
 ```
 
-## 🚀 Enterprise Benefits
+## 🚀 Key Benefits
 
-### 1. **🎯 Autonomous Enterprise Orchestration**
-- **Intelligent Enterprise Routing**: Automatic task delegation based on enterprise requirements
-- **Comprehensive Workflow Management**: Enterprise-grade workflow state tracking
-- **Enterprise Error Recovery**: Robust error handling and retry mechanisms for enterprise environments
-- **Real-Time Enterprise Monitoring**: Live progress tracking and reporting for enterprise workflows
-- **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality enterprise module generation
+### 1. **🎯 Autonomous Multi-Agent Orchestration**
+- **Intelligent Task Delegation**: Automatic routing to specialized agents based on workflow requirements
+- **State-Driven Workflows**: Comprehensive state tracking across planning, generation, and writing phases
+- **Robust Error Recovery**: Individual agent error handling with automatic retry mechanisms
+- **Real-Time Progress Tracking**: Live monitoring and reporting throughout the generation process
+- **Thorough Processing**: 20-25 minute generation time ensures high-quality, production-ready output
 
-### 2. **🔗 A2A Protocol Integration Benefits**
-- **🌐 Enterprise Agent Ecosystem**: Seamless integration with other specialized agents
-- **📊 Multi-Agent Coordination**: Coordinate with security, compliance, and monitoring agents
-- **🔄 Protocol Compliance**: Full A2A protocol compliance for enterprise environments
-- **📈 Scalable Architecture**: Multiple concurrent workflows with enterprise resource management
-- **🛡️ Enterprise State Management**: Robust state orchestration across agent boundaries
+### 2. **🔗 A2A Protocol Integration**
+- **Agent Ecosystem Compatibility**: Seamless integration with other A2A-compliant agents
+- **Cross-Agent Coordination**: Work alongside security, compliance, and monitoring agents
+- **Protocol Standardization**: Built on Google's A2A protocol for interoperability *(Note: Authentication/Authorization not yet implemented)*
+- **Scalable Architecture**: Support for multiple concurrent workflows with isolated state management
+- **Distributed State Orchestration**: Robust state management across agent boundaries
 
-### 3. **🏗️ Enterprise Modular Architecture**
-- **Enterprise Agent Specialization**: Each agent has a specific, well-defined enterprise role
-- **Enterprise State Isolation**: Separate state schemas prevent conflicts in enterprise environments
-- **Enterprise Tool Integration**: Sophisticated tool-based execution for enterprise patterns
-- **Enterprise Extensibility**: Easy to add new agents and capabilities for enterprise needs
+### 3. **🏗️ Modular Architecture**
+- **Specialized Agent Roles**: 7+ specialized agents (Planner, Generator Swarm, Writer, etc.) with focused responsibilities
+- **State Isolation**: Separate state schemas prevent conflicts and ensure agent independence
+- **Tool-Based Execution**: ReAct pattern with sophisticated tool integration for file operations
+- **Easy Extensibility**: Clear interfaces for adding new agents, tools, or capabilities
 
-### 4. **🔄 Advanced Enterprise Coordination**
-- **Enterprise Dependency Management**: Sophisticated dependency resolution for enterprise patterns
-- **Enterprise Handoff Mechanisms**: Intelligent agent-to-agent communication for enterprise workflows
-- **Enterprise State Transformation**: Seamless state conversion between enterprise agents
-- **Enterprise Completion Detection**: Automatic completion detection and reporting for enterprise modules
+### 4. **🔄 Advanced Agent Coordination**
+- **Dependency-Aware Handoffs**: Inter-agent communication based on workflow dependencies
+- **Priority-Based Routing**: Intelligent handoff sequencing for optimal generation flow
+- **State Transformation**: Automatic state adaptation between different agent contexts
+- **Completion Detection**: Smart detection and reporting of workflow completion
 
-### 5. **🛡️ Enterprise Production-Ready Features**
-- **Enterprise Error Handling**: Comprehensive error handling at all levels for enterprise environments
-- **Enterprise Logging**: Structured logging throughout the system for enterprise monitoring
-- **Enterprise Monitoring**: Real-time monitoring and observability for enterprise operations
-- **Enterprise Human-in-the-Loop**: Interactive clarification and approval workflows for complex enterprise requirements
+### 5. **🛡️ Production-Ready Features**
+- **Comprehensive Error Handling**: Multi-level error handling from supervisor to individual tools
+- **Structured Logging**: Detailed logs throughout the system for debugging and monitoring
+- **HCL Syntax Validation**: Built-in validation before writing Terraform files
+- **Backup Support**: Automatic file backups during write operations
+- **Human-in-the-Loop Ready**: Framework prepared for interactive clarification workflows *(Coming in next version)*
 
-### 6. **📊 Enterprise-Grade Output**
-- **Complete Enterprise Modules**: Full Terraform modules with all necessary enterprise files
-- **Enterprise Documentation**: Comprehensive README and inline documentation for enterprise use
-- **Enterprise Validation**: Built-in syntax and enterprise best practices validation
-- **Enterprise File Management**: Organized file structure and naming conventions for enterprise environments
-
-## 🛠️ Enterprise Technical Architecture
-
-### Enterprise State Management
-- **SupervisorState**: Main enterprise workflow state with comprehensive tracking
-- **PlannerSupervisorState**: Enterprise planning-specific state with sub-agent coordination
-- **GeneratorSwarmState**: Enterprise generation-specific state with dependency management
-- **WriterReactState**: Enterprise writing-specific state with operation tracking
-
-### Enterprise Handoff Mechanisms
-- **LangGraph Supervisor**: Advanced enterprise agent orchestration using `langgraph-supervisor`
-- **Enterprise Custom Handoff Tools**: Specialized tools for enterprise agent-to-agent communication
-- **Enterprise State Transformation**: Seamless state conversion between different enterprise schemas
-- **Enterprise Dependency Resolution**: Sophisticated dependency tracking and resolution for enterprise patterns
-
-### Enterprise Error Handling
-- **Multi-Level Enterprise Error Handling**: Error handling at supervisor, agent, and tool levels for enterprise environments
-- **Enterprise Graceful Degradation**: Continue processing despite individual failures in enterprise workflows
-- **Enterprise Retry Mechanisms**: Automatic retry with exponential backoff for enterprise operations
-- **Enterprise Error Reporting**: Comprehensive error logging and reporting for enterprise monitoring
-
-## 📈 Enterprise Performance & Scalability
-
-### Enterprise Optimization Features
-- **Enterprise Batch Operations**: Efficient batch file writing and processing for enterprise modules
-- **Enterprise State Isolation**: Prevents state conflicts between agents in enterprise environments
-- **Enterprise Async Processing**: Asynchronous agent execution for better enterprise performance
-- **Enterprise Memory Management**: Efficient memory usage with proper cleanup for enterprise workflows
-- **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality enterprise module generation (5-15 minutes per module)
-
-### Enterprise Monitoring & Observability
-- **Enterprise Structured Logging**: Comprehensive logging with structured data for enterprise monitoring
-- **Enterprise Progress Tracking**: Real-time progress monitoring for enterprise workflows
-- **Enterprise Performance Metrics**: Detailed performance metrics and analytics for enterprise operations
-- **Enterprise Error Tracking**: Comprehensive error tracking and analysis for enterprise environments
+### 6. **📊 Complete Terraform Modules**
+- **Full Module Structure**: Generates all necessary files (main.tf, variables.tf, outputs.tf, backend.tf, data.tf, locals.tf)
+- **Comprehensive Documentation**: Auto-generated README with usage examples, inputs, outputs, and best practices
+- **Best Practices Built-In**: Security configurations, naming conventions, and AWS best practices
+- **Ready to Deploy**: Validated syntax and organized file structure for immediate use
 
 ## 🔧 Configuration & Customization
 
+### Environment Configuration
+
+AWS Orchestrator Agent can be customized via environment variables or a `.env` file in the project root.
+
+Below are the main configuration options with their default values:
+
+```python
+# aws_orchestrator_agent/config/default.py
+
+# LLM Configuration
+LLM_PROVIDER = "openai"                    # LLM provider (openai, anthropic, azure, etc.)
+LLM_MODEL = "gpt-4o-mini"                  # Model name for standard operations
+LLM_TEMPERATURE = 0.0                      # Sampling temperature (0.0-1.0)
+LLM_MAX_TOKENS = 15000                     # Maximum tokens per response
+
+# Higher LLM Configuration (for complex reasoning tasks)
+LLM_HIGHER_PROVIDER = "openai"             # Provider for complex reasoning
+LLM_HIGHER_MODEL = "gpt-5-mini"            # Model for complex tasks
+LLM_HIGHER_TEMPERATURE = 0.0               # Temperature for complex reasoning
+LLM_HIGHER_MAX_TOKENS = 15000              # Max tokens for complex tasks
+
+# React Agent LLM Configuration (for Writer Agent)
+LLM_REACT_AGENT_PROVIDER = "openai"        # Provider for file operations
+LLM_REACT_AGENT_MODEL = "gpt-4.1-mini"     # Model for Writer React Agent
+LLM_REACT_AGENT_TEMPERATURE = 0.0          # Temperature for file operations
+LLM_REACT_AGENT_MAX_TOKENS = 25000         # Max tokens for file operations
+
+# Module Configuration
+MODULE_PATH = "/path/to/aws-orchestrator-agent"  # Project root path
+
+# Logging Configuration
+LOG_LEVEL = "INFO"                         # Logging level (DEBUG, INFO, WARNING, ERROR)
+LOG_FILE = "aws_orchestrator_agent.log"    # Log file path
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+LOG_TO_CONSOLE = True                      # Output logs to console
+LOG_TO_FILE = True                         # Output logs to file
+LOG_STRUCTURED_JSON = False                # Output logs in JSON format
+
+
+# Supervisor Agent Configuration
+SUPERVISOR_OUTPUT_MODE = "full_history"    # Output mode for supervisor
+SUPERVISOR_MAX_RETRIES = 3                 # Max retry attempts
+SUPERVISOR_TIMEOUT_SECONDS = 300           # Workflow timeout (seconds)
+SUPERVISOR_MAX_CONCURRENT_WORKFLOWS = 10   # Max concurrent workflows
+
+# A2A Server Configuration
+A2A_SERVER_HOST = "localhost"              # A2A server host
+A2A_SERVER_PORT = 10102                    # A2A server port
+```
+
+> **💡 Tip:**  
+> You can override any of these settings by adding them to your `.env` file or exporting them as environment variables before starting the AWS Orchestrator Agent.
+
+**Example `.env` file:**
+
+```env
+# LLM Configuration
+OPENAI_API_KEY=sk-your-openai-api-key-here
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o
+LLM_TEMPERATURE=0.1
+LLM_MAX_TOKENS=20000
+
+# Logging
+LOG_LEVEL=DEBUG
+LOG_TO_CONSOLE=True
+LOG_STRUCTURED_JSON=False
+
+
+# A2A Server
+A2A_SERVER_HOST=0.0.0.0
+A2A_SERVER_PORT=10102
+
+# Module Path
+MODULE_PATH=/Users/yourname/projects/aws-orchestrator-agent
+```
+
+> **📖 Note:**  
+> For a complete list of all configuration options, security settings, compliance requirements, and advanced supervisor configurations, see [`aws_orchestrator_agent/config/default.py`](aws_orchestrator_agent/config/default.py).
+
+---
+
 ### LLM Configuration
+
+#### Multi-Provider Architecture
+The system uses a modular, extensible LLM provider architecture built on an abstract base class pattern:
+
 - **Multi-Provider Support**: Support for multiple LLM providers (Anthropic, OpenAI, Azure, etc.)
 - **Model Selection**: Configurable model selection per agent
 - **Parameter Tuning**: Adjustable temperature, max tokens, and other parameters
 - **Provider Switching**: Easy switching between different LLM providers
+
+#### Adding a New LLM Provider
+
+To add a new LLM provider to the system, follow these steps:
+
+##### 1. Implement the Provider Class
+**Location:** `aws_orchestrator_agent/core/llm/llm_provider.py`
+
+Create a new provider class that inherits from `BaseLLMProvider`:
+
+```python
+from .base_llm_provider import BaseLLMProvider
+from langchain_core.runnables import Runnable
+
+class MyNewProvider(BaseLLMProvider):
+    """
+    Concrete LLM provider for MyNewProvider models.
+    Implements the BaseLLMProvider interface.
+    """
+    def create_llm(
+        self,
+        model: str,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        timeout: int = 60,
+        **kwargs: Any
+    ) -> Runnable:
+        # Import your provider's SDK or LangChain integration
+        # from my_provider_sdk import MyProviderLLM
+        
+        # Build configuration dictionary
+        config = {
+            "model": model,
+            "temperature": temperature,
+            # ... other parameters ...
+        }
+        config.update(kwargs)
+        
+        # Return a LangChain-compatible Runnable
+        return MyProviderLLM(**config)
+```
+
+##### 2. Register in the Factory
+Update the `_create_provider_instance` method in `LLMProvider`:
+
+```python
+elif provider == "mynewprovider":
+    return MyNewProvider().create_llm(
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        timeout=timeout,
+        **kwargs
+    )
+```
+
+Add your provider to the `_SUPPORTED_PROVIDERS` set.
+
+##### 3. Add Environment Variables (Optional)
+If your provider requires API keys or endpoints, add them to your `.env` file:
+```bash
+MY_NEW_PROVIDER_API_KEY=your_api_key_here
+MY_NEW_PROVIDER_ENDPOINT=https://api.example.com
+```
+
+##### 4. Test Your Provider
+Ensure your provider works by running the agent with your provider selected in the configuration.
+
+#### Best Practices for Provider Implementation
+- Follow the structure and docstring style of existing providers
+- Use type hints and clear error messages
+- Keep all provider-specific logic encapsulated in your provider class
+- Do not modify agent or planner code—only the provider and factory
+- Handle API keys and endpoints securely
+
+#### Reference Documentation
+- [Base LLM Provider](aws_orchestrator_agent/core/llm/base_llm_provider.py)
+- [LLM Provider Factory](aws_orchestrator_agent/core/llm/llm_provider.py)
+- [Complete Onboarding Guide](docs/ONBOARDING_LLM_PROVIDER.md)
 
 ### Agent Configuration
 - **Custom Prompts**: Configurable prompts for each agent
@@ -398,30 +508,30 @@ sequenceDiagram
 - **Workflow Customization**: Customizable workflow phases and routing
 - **Error Handling**: Configurable error handling and retry policies
 
-## 🎯 Enterprise Use Cases
+## 🎯 Use Cases
 
 ### 1. **🏗️ Enterprise Infrastructure as Code**
 - Generate complete enterprise-grade Terraform modules for AWS services
 - Create standardized, reusable enterprise infrastructure components
 - Ensure enterprise best practices and security compliance
 - Automate enterprise infrastructure provisioning workflows
-- **⏱️ Time-Intensive**: 5-15 minutes per enterprise module for thorough analysis and generation
+- **⏱️ Time-Intensive**: 20-25 minutes per enterprise module for thorough analysis and generation
 
-### 2. **🔄 Enterprise DevOps Automation**
+### 2. **🔄 DevOps Automation**
 - Integrate with enterprise CI/CD pipelines
 - Automate enterprise infrastructure testing and validation
 - Streamline enterprise deployment processes
 - Reduce manual enterprise infrastructure management
 - **Autonomous Processing**: Fully autonomous enterprise module generation with minimal human intervention
 
-### 3. **📚 Enterprise Knowledge Management**
+### 3. **📚 Knowledge Management**
 - Create comprehensive enterprise documentation
 - Maintain enterprise infrastructure knowledge bases
 - Standardize enterprise infrastructure patterns
 - Enable enterprise knowledge sharing across teams
 - **Research-Driven**: Deep research and analysis for enterprise-grade solutions
 
-### 4. **🛡️ Enterprise Security & Compliance**
+### 4. **🛡️ Security & Compliance**
 - Ensure enterprise security best practices
 - Validate enterprise compliance requirements
 - Automate enterprise security scanning
@@ -435,116 +545,88 @@ sequenceDiagram
 - Terraform CLI
 - AWS CLI (for deployment)
 - Required Python packages (see pyproject.toml)
-- **⏱️ Time Allocation**: Allow 5-15 minutes per enterprise module generation
+- **⏱️ Time Allocation**: Allow 20-25 minutes per enterprise module generation
 
 ### Installation
 
 #### Option 1: Standalone Installation
-```bash
-# Clone the repository
-git clone <repository-url>
-cd aws-orchestrator-agent
 
-# Install dependencies
-pip install -e .
+1. **Install [uv](https://docs.astral.sh/uv/getting-started/installation/)** for dependency management
+2. **Create and activate a virtual environment with Python 3.12:**
+   ```sh
+   uv venv --python=3.12
+   source .venv/bin/activate  # On Unix/macOS
+   # or
+   .venv\Scripts\activate  # On Windows
+   ```
+3. **Install dependencies from pyproject.toml:**
+   ```sh
+   uv pip install -e .
+   ```
+4. **Create a `.env` file and add the following environment variables:**
+   ```sh
+   OPENAI_API_KEY=XXXXXXXXX
+   ```
+   > **Note:** All available configuration options can be found in [`aws_orchestrator_agent/config/default.py`](aws_orchestrator_agent/config/default.py). You can set any of these options via your `.env` file to customize the AWS Orchestrator Agent's behavior.
 
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your configuration
+5. **Start the A2A server with the agent card:**
+   ```sh
+   uv run --active aws-orchestrator-agent \
+     --host localhost \
+     --port 10102 \
+     --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
+   ```
 
-# Run standalone
-python -m aws_orchestrator_agent.main
-```
-
-#### Option 2: A2A Agent Server Deployment
-```bash
-# Install dependencies
-pip install -e .
-
-# Start A2A server with agent card
-uv run --active aws-orchestrator-agent \
-  --host localhost \
-  --port 10102 \
-  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
-```
-
-
-#### Option 3: Docker Deployment
+#### Option 2: Docker Deployment
 ```bash
 # Build Docker image
 docker build -t aws-orchestrator-agent .
 
 # Run as A2A agent server
-docker run -p 8000:8000 \
+docker run -p 10102:10102 \
   -e OPENAI_API_KEY=your_key \
   -e ANTHROPIC_API_KEY=your_key \
   aws-orchestrator-agent
 ```
 
-### Enterprise Usage
+---
 
-#### Standalone Usage
-```python
-from aws_orchestrator_agent.core.agents.supervisor_agent import create_supervisor_agent
+### A2A Protocol Server
 
-# Create enterprise supervisor with all agents
-supervisor = create_supervisor_agent(
-    agents=[planner_agent, generator_agent, writer_agent, validation_agent],
-    config=config
-)
+This agent runs on the Google A2A protocol to communicate with other A2A agents. To enable this, you will need an agent card so that other clients or servers can interact with this service.
 
-# Process enterprise user request
-# ⏱️ This will take 5-15 minutes for enterprise-grade modules
-async for response in supervisor.stream("Create an enterprise S3 bucket module with advanced security and compliance features", context_id, task_id):
-    print(response.content)
+**Alternative server startup with custom host and port:**
+```sh
+uv run aws-orchestrator-agent \
+  --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json \
+  --host 0.0.0.0 \
+  --port 10102
+```
+- `--host`: The host address to bind the server (default: `localhost`)
+- `--port`: The port to run the server on (default: `10102`)
+
+---
+
+## 🧑‍💻 Interacting with the Orchestrator Agent
+
+To interact with the Orchestrator Agent server, use the provided A2A client in [`aws_orchestrator_client`](aws_orchestrator_client). While further enhancements are planned, you can use it to communicate with the server as follows:
+
+**Start the client:**
+```sh
+python aws_orchestrator_client/client.py
 ```
 
-#### A2A Agent Integration
-```python
-from a2a.server import AgentServer
-from a2a.server.request_handlers import DefaultRequestHandler
-from aws_orchestrator_agent.core import GenericAgentExecutor
-from aws_orchestrator_agent.core.agents.supervisor_agent import create_supervisor_agent
+> **Note:** You can override the following options when running the client:
+> - `--agent`: The URL of the Orchestrator Agent server to connect to (default: `http://localhost:10102`)
+> - `--session`: The session ID to use (default: `0`)
+> - `--history`: Whether to show session history (default: `False`)
+>
+> **Example:**
+> ```sh
+> python aws_orchestrator_client/client.py --agent http://localhost:10102 --session 1 --history True
+> ```
 
-# Create supervisor agent
-supervisor_agent = create_supervisor_agent(config=config)
 
-# Create A2A executor
-executor = GenericAgentExecutor(agent=supervisor_agent)
-
-# Create A2A server
-server = AgentServer()
-server.register_agent(
-    name="aws-orchestrator-supervisor",
-    handler=DefaultRequestHandler(agent_executor=executor),
-    agent_card={
-        "name": "AWS Orchestrator Supervisor",
-        "description": "Intelligent AWS infrastructure orchestration with multi-agent coordination",
-        "capabilities": [
-            "terraform_generation",
-            "infrastructure_analysis", 
-            "security_validation",
-            "compliance_checking",
-            "cost_optimization"
-        ]
-    }
-)
-
-# Start A2A server
-server.start(host="0.0.0.0", port=8000)
-```
-
-#### A2A Request Example
-```json
-{
-    "method": "run_task",
-    "params": {
-        "query": "Create a VPC with subnets and security groups",
-        "context_id": "ctx-123",
-        "task_id": "task-456"
-    }
-}
-```
 
 ## 📚 Documentation
 
@@ -555,30 +637,18 @@ server.start(host="0.0.0.0", port=8000)
 - **[Supervisor Agent Architecture](docs/supervisor-agent-architecture.md)**: Main supervisor architecture
 - **[Agent Architecture Overview](docs/agent-architecture.md)**: General agent architecture
 
-### API Reference
-- **Agent APIs**: Complete API documentation for all agents
-- **State Models**: Detailed state schema documentation
-- **Tool Reference**: Comprehensive tool documentation
-- **Configuration Guide**: Complete configuration reference
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are always welcome. Please follow the workflow below:
 
-### Development Setup
-```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
+### Development Workflow
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-# Run tests
-pytest
-
-# Run linting
-flake8
-
-# Run type checking
-mypy
-```
 
 ## 📄 License
 
@@ -586,10 +656,28 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🙏 Acknowledgments
 
-- **LangGraph**: For the powerful agent orchestration framework
-- **LangChain**: For the comprehensive LLM integration tools
-- **AWS**: For the robust cloud infrastructure platform
-- **Terraform**: For the infrastructure as code capabilities
+We would like to thank the following projects and organizations that made this system possible:
+
+### Frameworks & Orchestration
+- **[LangGraph](https://github.com/langchain-ai/langgraph)**: For the powerful multi-agent orchestration framework that enables sophisticated agent coordination
+- **[LangChain](https://github.com/langchain-ai/langchain)**: For the comprehensive LLM integration tools and abstractions
+- **[Google A2A Protocol](https://github.com/google/a2a)**: For the Agent-to-Agent communication protocol enabling enterprise agent ecosystems
+
+### AI & LLM Providers
+- **[Anthropic](https://www.anthropic.com/)**: For Claude models with advanced reasoning capabilities
+- **[OpenAI](https://openai.com/)**: For GPT models and comprehensive AI API
+- **[Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)**: For enterprise-grade OpenAI model hosting
+- **Additional Providers**: Support for multiple LLM providers ensuring flexibility and resilience
+
+### Infrastructure & Tooling
+- **[AWS](https://aws.amazon.com/)**: For the robust cloud infrastructure platform and comprehensive service ecosystem
+- **[Terraform](https://www.terraform.io/)**: For the industry-standard infrastructure as code capabilities
+- **[Python](https://www.python.org/)**: For the powerful, flexible programming language
+- **[uv](https://github.com/astral-sh/uv)**: For fast, reliable Python package and project management
+
+### Community
+- **Open Source Community**: For the countless libraries, tools, and best practices that enable modern software development
+- **DevOps & Infrastructure Community**: For continuous feedback, contributions, and support
 
 ---
 
