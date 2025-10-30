@@ -43,9 +43,9 @@ classifiers = [
 ]
 
 [project.urls]
-homepage = "https://github.com/your-org/aws-orchestrator-agent"
-repository = "https://github.com/your-org/aws-orchestrator-agent.git"
-documentation = "https://github.com/your-org/aws-orchestrator-agent#readme"
+homepage = "https://github.com/talkops-ai/aws-orchestrator-agent"
+repository = "https://github.com/talkops-ai/aws-orchestrator-agent.git"
+documentation = "https://github.com/talkops-ai/aws-orchestrator-agent/blob/main/README.md"
 
 [project.scripts]
 aws-orchestrator-agent = "aws_orchestrator_agent.server:main"

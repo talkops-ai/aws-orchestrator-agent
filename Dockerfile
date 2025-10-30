@@ -1,4 +1,4 @@
-# Use Python 3.12 Alpine as base image
+# Use Python 3.12 slim as base image
 FROM python:3.12-slim AS uv
 
 # Install the project into `/app`
