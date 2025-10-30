@@ -1,5 +1,17 @@
 # AWS Orchestrator Agent
 
+<div align="center">
+
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/2V8AAufgp6)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF6B6B?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
+[![A2A Protocol](https://img.shields.io/badge/Google%20A2A-Protocol-4285F4?style=for-the-badge)](https://github.com/google/a2a)
+
+</div>
+
+---
+
 ## 🚀 Enterprise-Grade Multi-Agent Terraform Module Generation System
 
 **AWS Orchestrator Agent** is a sophisticated, autonomous multi-agent system that generates enterprise-level AWS Terraform modules through intelligent research, deep analysis, and AI-powered code generation. Built with LangGraph and the Google A2A protocol, it leverages advanced AI orchestration patterns to deliver production-ready infrastructure automation through coordinated specialist agents.
@@ -638,9 +650,35 @@ python aws_orchestrator_client/client.py
 - **[Agent Architecture Overview](docs/agent-architecture.md)**: General agent architecture
 
 
+## 💬 Community & Support
+
+Join our community to get help, share ideas, and contribute to the project!
+
+### Discord Community
+
+[![Join our Discord](https://img.shields.io/badge/Discord-Join%20Our%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/2V8AAufgp6)
+
+Connect with other users, developers, and contributors:
+- 💡 **Get Help**: Ask questions and get support from the community
+- 🚀 **Share Projects**: Showcase your Terraform modules and use cases
+- 🐛 **Report Issues**: Discuss bugs and feature requests
+- 🤝 **Collaborate**: Find contributors and collaborate on improvements
+- 📢 **Stay Updated**: Get notified about new releases and updates
+
+**[Join the Discord Server →](https://discord.gg/2V8AAufgp6)**
+
+### Getting Support
+
+- **Discord**: For real-time help and discussions, join our [Discord community](https://discord.gg/2V8AAufgp6)
+- **GitHub Issues**: For bug reports and feature requests, use [GitHub Issues](https://github.com/yourusername/aws-orchestrator-agent/issues)
+- **Documentation**: Check our comprehensive [documentation](#-documentation) for guides and references
+- **Examples**: Explore example modules in the `modules/` directory
+
+---
+
 ## 🤝 Contributing
 
-Contributions are always welcome. Please follow the workflow below:
+Contributions are always welcome! Please follow the workflow below:
 
 ### Development Workflow
 1. Fork the repository
@@ -648,6 +686,13 @@ Contributions are always welcome. Please follow the workflow below:
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### Contributing Guidelines
+- Follow the existing code style and conventions
+- Add tests for new features
+- Update documentation as needed
+- Ensure all tests pass before submitting PR
+- Write clear, descriptive commit messages
 
 
 ## 📄 License
