@@ -3,6 +3,7 @@
 <div align="center">
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/2V8AAufgp6)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-sandeep2014/aws--orchestrator--agent-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/sandeep2014/aws-orchestrator-agent)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF6B6B?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
@@ -589,16 +590,42 @@ Ensure your provider works by running the agent with your provider selected in t
      --agent-card aws_orchestrator_agent/card/aws_orchestrator_agent.json
    ```
 
-#### Option 2: Docker Deployment
+#### Option 2: Docker Hub (Recommended for Quick Start)
+
+**Pull and run the pre-built image from Docker Hub:**
+
 ```bash
+# Pull the latest version
+docker pull sandeep2014/aws-orchestrator-agent:latest
+
+# Run the A2A server
+docker run -d -p 10102:10102 \
+  -e OPENAI_API_KEY=your_openai_key_here \
+  --name aws-orchestrator \
+  sandeep2014/aws-orchestrator-agent:latest
+```
+
+**Available Docker tags:**
+- `latest` - Latest stable release
+- `v0.1.0` - Specific version
+
+#### Option 3: Build Docker Image Locally
+
+**Build from source:**
+```bash
+# Clone the repository
+git clone https://github.com/talkops-ai/aws-orchestrator-agent.git
+cd aws-orchestrator-agent
+
 # Build Docker image
-docker build -t aws-orchestrator-agent .
+docker build -t aws-orchestrator-agent:local .
 
 # Run as A2A agent server
-docker run -p 10102:10102 \
+docker run -d -p 10102:10102 \
   -e OPENAI_API_KEY=your_key \
   -e ANTHROPIC_API_KEY=your_key \
-  aws-orchestrator-agent
+  --name aws-orchestrator \
+  aws-orchestrator-agent:local
 ```
 
 ---
@@ -621,7 +648,22 @@ uv run aws-orchestrator-agent \
 
 ## 🧑‍💻 Interacting with the Orchestrator Agent
 
-To interact with the Orchestrator Agent server, use the provided A2A client in [`aws_orchestrator_client`](aws_orchestrator_client). While further enhancements are planned, you can use it to communicate with the server as follows:
+> **⚠️ Important**: Regardless of how you installed the agent (Standalone, Docker Hub, or Local Build), you need the Python client to interact with the server.
+
+### Installing the Client
+
+The Python client is included in the repository. Clone it to get the client:
+
+```bash
+# Clone the repository (if you haven't already)
+git clone https://github.com/talkops-ai/aws-orchestrator-agent.git
+cd aws-orchestrator-agent
+
+# Install client dependencies (optional, only if you get import errors)
+pip install httpx colorama
+```
+
+### Using the Client
 
 **Start the client:**
 ```sh
@@ -638,7 +680,28 @@ python aws_orchestrator_client/client.py
 > python aws_orchestrator_client/client.py --agent http://localhost:10102 --session 1 --history True
 > ```
 
+### Example Workflow (Docker + Client)
 
+```bash
+# 1. Start the Docker container
+docker run -d -p 10102:10102 \
+  -e OPENAI_API_KEY=your_key \
+  --name aws-orchestrator \
+  sandeep2014/aws-orchestrator-agent:latest
+
+# 2. Verify the server is running
+docker logs aws-orchestrator
+
+# 3. Clone the repository for the client
+git clone https://github.com/talkops-ai/aws-orchestrator-agent.git
+cd aws-orchestrator-agent
+
+# 4. Run the client to interact with the server
+python aws_orchestrator_client/client.py
+
+# 5. In the client, request a Terraform module
+# Example: "Create an S3 bucket module with versioning and encryption"
+```
 
 ## 📚 Documentation
 
