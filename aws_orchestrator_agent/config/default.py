@@ -18,7 +18,7 @@ class DefaultConfig:
     LLM_REACT_AGENT_MAX_TOKENS: int = 25000
 
     # Module Configuration
-    MODULE_PATH: str = "/Users/structbinary/Documents/work/talkops/aws-orchestrator-agent"
+    MODULE_PATH: str = "/app/aws_orchestrator_agent"
     
     # Logging Configuration
     LOG_LEVEL: str = "INFO"

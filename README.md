@@ -169,88 +169,88 @@ aws-orchestrator-agent \
 
 ### 1. 🎯 Main Supervisor Agent (`CustomSupervisorAgent`)
 
-**The Autonomous Orchestrator** - Manages the entire enterprise-grade workflow lifecycle using `langgraph-supervisor`.
+**The Autonomous Orchestrator** - Manages the entire workflow lifecycle using `langgraph-supervisor`.
 
 #### Key Features:
 - **🔄 Autonomous Workflow Orchestration**: Coordinates all sub-agents through intelligent routing
 - **📊 Comprehensive State Management**: Maintains detailed workflow state across all phases
-- **🛡️ Enterprise-Grade Error Handling**: Robust error recovery and retry mechanisms
+- **🛡️ Robust Error Handling**: Advanced error recovery and retry mechanisms
 - **👤 Human-in-the-Loop**: Interactive clarification for complex requirements[To be release on next version]
 - **📈 Real-Time Progress Tracking**: Live workflow progress monitoring and reporting
-- **🔀 Intelligent Agent Routing**: Smart task delegation based on enterprise requirements
+- **🔀 Intelligent Agent Routing**: Smart task delegation based on requirements
 - **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality module generation
 
 #### Autonomous Workflow Phases:
 1. **📋 Deep Research Phase**: Delegates to Planner Sub-Supervisor for comprehensive analysis
-2. **🏭 Autonomous Generation Phase**: Delegates to Generator Swarm for enterprise-grade code generation
-3. **📝 Enterprise Writing Phase**: Delegates to Writer React Agent for production-ready file creation
+2. **🏭 Autonomous Generation Phase**: Delegates to Generator Swarm for production-grade code generation
+3. **📝 Writing Phase**: Delegates to Writer React Agent for production-ready file creation
 
 ### 2. 📋 Planner Sub-Supervisor Agent
 
-**The Enterprise Research Engine** - Conducts deep research and analysis to create comprehensive execution plans.
+**The Research Engine** - Conducts deep research and analysis to create comprehensive execution plans.
 
 #### Sub-Agents:
-- **🔍 Requirements Analyzer**: Deep analysis of enterprise infrastructure requirements
-- **📊 Execution Planner**: Creates detailed enterprise-grade execution plans with comprehensive resource configurations
-- **🔒 Security & Best Practices Evaluator**: Ensures enterprise security standards and compliance (optional)
+- **🔍 Requirements Analyzer**: Deep analysis of infrastructure requirements
+- **📊 Execution Planner**: Creates detailed execution plans with comprehensive resource configurations
+- **🔒 Security & Best Practices Evaluator**: Ensures security standards and compliance (optional)
 
-#### Enterprise Output:
-- **Comprehensive Requirements Data**: Detailed enterprise infrastructure requirements
-- **Enterprise Execution Plans**: Production-ready Terraform module specifications
-- **Advanced Resource Configurations**: Complete enterprise resource definitions with best practices
-- **Enterprise Variable Definitions**: Comprehensive input variable specifications
-- **Enterprise Module Structure**: Production-ready file organization and architecture
+#### Output:
+- **Comprehensive Requirements Data**: Detailed infrastructure requirements
+- **Execution Plans**: Production-ready Terraform module specifications
+- **Advanced Resource Configurations**: Complete resource definitions with best practices
+- **Variable Definitions**: Comprehensive input variable specifications
+- **Module Structure**: Production-ready file organization and architecture
 
 ### 3. 🏭 Generator Swarm Agent
 
-**The Autonomous Enterprise Code Generation Engine** - Uses 7 specialized agents to generate enterprise-grade Terraform modules through sophisticated coordination.
+**The Autonomous Code Generation Engine** - Uses 7 specialized agents to generate production-grade Terraform modules through sophisticated coordination.
 
 #### Specialized Agents:
-1. **🏗️ Resource Configuration Agent**: Generates enterprise-grade Terraform resource blocks with best practices
+1. **🏗️ Resource Configuration Agent**: Generates Terraform resource blocks with best practices
 2. **📝 Variable Definition Agent**: Creates comprehensive variable definitions with validation
-3. **🔍 Data Source Agent**: Generates advanced data source blocks for enterprise patterns
+3. **🔍 Data Source Agent**: Generates advanced data source blocks
 4. **💾 Local Values Agent**: Creates sophisticated local value blocks for complex logic
-5. **📤 Output Definition Agent**: Generates enterprise output definitions with proper documentation
+5. **📤 Output Definition Agent**: Generates output definitions with proper documentation
 6. **🗄️ Backend Generator Agent**: Creates production-ready backend configuration
-7. **📚 README Generator Agent**: Generates comprehensive enterprise documentation
+7. **📚 README Generator Agent**: Generates comprehensive documentation
 
-#### Enterprise Features:
-- **🔄 Sophisticated Dependency-Aware Handoffs**: Advanced inter-agent coordination for enterprise patterns
+#### Features:
+- **🔄 Sophisticated Dependency-Aware Handoffs**: Advanced inter-agent coordination
 - **📊 Isolated State Management**: Separate state schemas for each agent to prevent conflicts
-- **🎯 Priority-Based Enterprise Routing**: Handoffs based on enterprise dependency priority
-- **🛡️ Enterprise Error Recovery**: Individual agent error handling with enterprise-grade continuation
-- **📈 Real-Time Enterprise Progress Tracking**: Live generation progress monitoring for enterprise workflows
-- **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality enterprise module generation
+- **🎯 Priority-Based Routing**: Handoffs based on dependency priority
+- **🛡️ Error Recovery**: Individual agent error handling with graceful continuation
+- **📈 Real-Time Progress Tracking**: Live generation progress monitoring
+- **⏱️ Time-Intensive Processing**: Designed for thorough, high-quality module generation
 
 ### 4. 📝 Writer React Agent
 
-**The Enterprise File System Manager** - Writes enterprise-grade Terraform modules to the filesystem with production-ready organization.
+**The File System Manager** - Writes Terraform modules to the filesystem with production-ready organization.
 
-#### Enterprise Tools:
-- **📄 Enterprise File Writing**: Individual file writing with enterprise validation
-- **📦 Batch Enterprise Operations**: Efficient batch file operations for enterprise modules
-- **✅ Enterprise Syntax Validation**: HCL syntax validation with enterprise best practices
-- **📁 Enterprise Directory Management**: Production-ready directory structure management
-- **📋 Enterprise File Management**: Advanced directory listing and file management
-- **📖 Enterprise File Analysis**: Comprehensive file content reading and analysis
+#### Tools:
+- **📄 File Writing**: Individual file writing with validation
+- **📦 Batch Operations**: Efficient batch file operations
+- **✅ Syntax Validation**: HCL syntax validation with best practices
+- **📁 Directory Management**: Production-ready directory structure management
+- **📋 File Management**: Advanced directory listing and file management
+- **📖 File Analysis**: Comprehensive file content reading and analysis
 
-#### Enterprise Features:
-- **🔄 Enterprise React Agent Pattern**: Tool-based execution with enterprise state injection
-- **📊 Enterprise Operation Tracking**: Detailed file operation logging for enterprise workflows
-- **🛡️ Enterprise Error Handling**: Individual file error handling with enterprise-grade continuation
-- **💾 Enterprise Backup Support**: Automatic backup creation for enterprise file operations
-- **📈 Enterprise Progress Monitoring**: Real-time writing progress tracking for enterprise modules
+#### Features:
+- **🔄 React Agent Pattern**: Tool-based execution with state injection
+- **📊 Operation Tracking**: Detailed file operation logging
+- **🛡️ Error Handling**: Individual file error handling with graceful continuation
+- **💾 Backup Support**: Automatic backup creation for file operations
+- **📈 Progress Monitoring**: Real-time writing progress tracking
 
 ### 5. ✅ Validation Agent [Not Integrated - To be released on next version]
 
-**The Enterprise Quality Assurance** - Validates generated Terraform modules for enterprise-grade correctness and best practices.
+**The Quality Assurance Engine** - Validates generated Terraform modules for correctness and best practices.
 
-#### Enterprise Features:
-- **🔍 Enterprise Syntax Validation**: Comprehensive HCL syntax checking with enterprise standards
-- **📋 Enterprise Best Practices**: AWS and Terraform enterprise best practices validation
-- **🔒 Enterprise Security Scanning**: Advanced security vulnerability detection and compliance
-- **📊 Enterprise Resource Validation**: Comprehensive resource configuration validation
-- **🎯 Enterprise Compliance Checking**: Regulatory compliance verification for enterprise environments
+#### Features:
+- **🔍 Syntax Validation**: Comprehensive HCL syntax checking
+- **📋 Best Practices**: AWS and Terraform best practices validation
+- **🔒 Security Scanning**: Advanced security vulnerability detection and compliance
+- **📊 Resource Validation**: Comprehensive resource configuration validation
+- **🎯 Compliance Checking**: Regulatory compliance verification
 
 ## 🔄 Complete Workflow Example
 
