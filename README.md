@@ -97,13 +97,13 @@ graph TD
     H -.->|"Refined requirements"| S
     
     %% Styling
-    classDef user fill:#e1f5fe
-    classDef supervisor fill:#f3e5f5
-    classDef planner fill:#e8f5e8
-    classDef generator fill:#fff3e0
-    classDef writer fill:#fce4ec
-    classDef validation fill:#f0f4c3
-    classDef human fill:#ffebee
+    classDef user fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
+    classDef supervisor fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#fff
+    classDef planner fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
+    classDef generator fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
+    classDef writer fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#fff
+    classDef validation fill:#afb42b,stroke:#827717,stroke-width:3px,color:#fff
+    classDef human fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#fff
     
     class U user
     class S supervisor
@@ -136,9 +136,17 @@ graph TD
     G --> J[Validation Agent]
     G --> K[Editor Agent]
     
-    style D fill:#e1f5fe
-    style E fill:#f3e5f5
-    style F fill:#e8f5e8
+    style A fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
+    style B fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#fff
+    style C fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
+    style D fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
+    style E fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#fff
+    style F fill:#00796b,stroke:#004d40,stroke-width:3px,color:#fff
+    style G fill:#5e35b1,stroke:#311b92,stroke-width:3px,color:#fff
+    style H fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#fff
+    style I fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
+    style J fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
+    style K fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
 ```
 
 #### Key A2A Components
