@@ -97,13 +97,13 @@ graph TD
     H -.->|"Refined requirements"| S
     
     %% Styling
-    classDef user fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
-    classDef supervisor fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#fff
-    classDef planner fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
-    classDef generator fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
-    classDef writer fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#fff
-    classDef validation fill:#afb42b,stroke:#827717,stroke-width:3px,color:#fff
-    classDef human fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#fff
+    classDef user fill:#2c3e50,stroke:#1a252f,stroke-width:2px,color:#fff
+    classDef supervisor fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#fff
+    classDef planner fill:#16a085,stroke:#138d75,stroke-width:2px,color:#fff
+    classDef generator fill:#2980b9,stroke:#21618c,stroke-width:2px,color:#fff
+    classDef writer fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
+    classDef validation fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#fff
+    classDef human fill:#e67e22,stroke:#ca6f1e,stroke-width:2px,color:#fff
     
     class U user
     class S supervisor
@@ -136,17 +136,17 @@ graph TD
     G --> J[Validation Agent]
     G --> K[Editor Agent]
     
-    style A fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
-    style B fill:#7b1fa2,stroke:#4a148c,stroke-width:3px,color:#fff
-    style C fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
-    style D fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
-    style E fill:#c2185b,stroke:#880e4f,stroke-width:3px,color:#fff
-    style F fill:#00796b,stroke:#004d40,stroke-width:3px,color:#fff
-    style G fill:#5e35b1,stroke:#311b92,stroke-width:3px,color:#fff
-    style H fill:#d32f2f,stroke:#b71c1c,stroke-width:3px,color:#fff
-    style I fill:#f57c00,stroke:#e65100,stroke-width:3px,color:#fff
-    style J fill:#388e3c,stroke:#1b5e20,stroke-width:3px,color:#fff
-    style K fill:#1976d2,stroke:#0d47a1,stroke-width:3px,color:#fff
+    style A fill:#2c3e50,stroke:#1a252f,stroke-width:2px,color:#fff
+    style B fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#fff
+    style C fill:#2980b9,stroke:#21618c,stroke-width:2px,color:#fff
+    style D fill:#16a085,stroke:#138d75,stroke-width:2px,color:#fff
+    style E fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
+    style F fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#fff
+    style G fill:#2c3e50,stroke:#1a252f,stroke-width:2px,color:#fff
+    style H fill:#c0392b,stroke:#a93226,stroke-width:2px,color:#fff
+    style I fill:#2980b9,stroke:#21618c,stroke-width:2px,color:#fff
+    style J fill:#16a085,stroke:#138d75,stroke-width:2px,color:#fff
+    style K fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
 ```
 
 #### Key A2A Components
