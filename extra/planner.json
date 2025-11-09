@@ -1,0 +1,1801 @@
+{
+    "module_structure_plan": {
+      "module_structure_plans": [
+        {
+          "service_name": "s3",
+          "recommended_files": [
+            {
+              "filename": "main.tf",
+              "required": true,
+              "purpose": "Primary resource composition for the S3 bucket and related resources.",
+              "content_description": "Defines aws_s3_bucket (creation), aws_s3_bucket_versioning, aws_s3_bucket_server_side_encryption_configuration, aws_s3_bucket_lifecycle_configuration, aws_s3_bucket_policy attachments and aws_s3_bucket_public_access_block. References variables for configuration and outputs for composition."
+            },
+            {
+              "filename": "variables.tf",
+              "required": true,
+              "purpose": "Declare module inputs and validations.",
+              "content_description": "All module variables with types, descriptions, validation rules, defaults (where applicable) and sensitive flags. Grouped (identity, security, network/ops, lifecycle, tags, integrations)."
+            },
+            {
+              "filename": "outputs.tf",
+              "required": true,
+              "purpose": "Expose computed attributes for composition and downstream modules.",
+              "content_description": "Outputs such as bucket id/name, arn, domain names, hosted zone id, regional domain, website endpoints, versioning/encryption states, and references for integration with KMS/CloudTrail/monitoring."
+            },
+            {
+              "filename": "versions.tf",
+              "required": true,
+              "purpose": "Provider and Terraform version constraints.",
+              "content_description": "Terraform required_version constraint and required_providers block for aws provider. Also recommended provider features for s3 and kms enabling."
+            },
+            {
+              "filename": "security.tf",
+              "required": true,
+              "purpose": "Security-focused resources and policies.",
+              "content_description": "aws_s3_bucket_public_access_block resource, bucket policy template (driven by variables/external_principals), IAM conditions references, and enforcement helpers (expected_bucket_owner)."
+            },
+            {
+              "filename": "lifecycle.tf",
+              "required": true,
+              "purpose": "Lifecycle management and data protection rules.",
+              "content_description": "aws_s3_bucket_lifecycle_configuration rules (transitions, expirations, noncurrent transitions) plus object lock configuration hooks and abort_incomplete_multipart_upload settings. Document defaults for retention tiers."
+            },
+            {
+              "filename": "monitoring.tf",
+              "required": true,
+              "purpose": "Observability and audit integration.",
+              "content_description": "Server access logging configuration (references logging_bucket), CloudTrail data event integration guidance (variable reference to cloudtrail_arn), CloudWatch metrics and optional SNS/CloudWatch alarms wiring using monitoring_role_arn."
+            },
+            {
+              "filename": "examples.tf",
+              "required": true,
+              "purpose": "Example usage and common presets for different patterns.",
+              "content_description": "Example blocks (object storage immutable, secure storage zone, data lake landing zone) showing variable values, lifecycle presets, encryption usage, replication placeholders, and recommended IAM policy snippets."
+            }
+          ],
+          "variable_definitions": [
+            {
+              "name": "environment",
+              "type": "string",
+              "description": "Deployment environment (used in naming and tags).",
+              "default_value": null,
+              "validation_rules": [
+                "non-empty string",
+                "recommended values: dev, test, staging, prod (enforce via CI if required)"
+              ],
+              "sensitive": false,
+              "justification": "Used for consistent resource names and required tagging (Environment). Marked mandatory to ensure tag hygiene and environment isolation."
+            },
+            {
+              "name": "application",
+              "type": "string",
+              "description": "Application or logical group owning the bucket (used in names and tags).",
+              "default_value": null,
+              "validation_rules": [
+                "non-empty string",
+                "lowercase, alphanumeric and hyphens recommended"
+              ],
+              "sensitive": false,
+              "justification": "Used for consistent naming and tagging (Application). Required for auditability and naming conventions."
+            },
+            {
+              "name": "bucket_name",
+              "type": "string",
+              "description": "Explicit S3 bucket name. If provided, module will attempt to create/use this exact name. If null, bucket_prefix is used to generate a unique name.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, must match S3 DNS name rules: ^[a-z0-9.-]{3,63}$",
+                "must not contain uppercase or underscores",
+                "should not be formatted as an IP address (e.g., 192.168.5.4)"
+              ],
+              "sensitive": false,
+              "justification": "Allows consumers to supply a deterministic bucket name when required by organizational policy or cross-account references."
+            },
+            {
+              "name": "bucket_prefix",
+              "type": "string",
+              "description": "Prefix to generate a unique bucket name when bucket_name is not provided. Module will append a random suffix to ensure global uniqueness.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "must be 3-40 characters recommended for collision avoidance",
+                "lowercase letters, numbers and hyphens only"
+              ],
+              "sensitive": false,
+              "justification": "Enables repeatable module usage across environments/accounts without collisions while avoiding manual unique naming."
+            },
+            {
+              "name": "acl",
+              "type": "string",
+              "description": "Canned ACL to apply to the bucket.",
+              "default_value": "private",
+              "validation_rules": [
+                "one of: private, public-read, public-read-write, authenticated-read",
+                "recommend using bucket policies for fine-grained access instead of ACLs"
+              ],
+              "sensitive": false,
+              "justification": "Sets a baseline ACL; default to 'private' to follow least-privilege posture. Exposed for legacy compatibility."
+            },
+            {
+              "name": "force_destroy",
+              "type": "bool",
+              "description": "If true, removes all objects (including versioned objects) when destroying the bucket. Use with caution.",
+              "default_value": false,
+              "validation_rules": [
+                "boolean",
+                "recommend false for production buckets; require explicit approval in automation if set true"
+              ],
+              "sensitive": false,
+              "justification": "Protects against accidental data loss during destroy operations; default false enforces safety."
+            },
+            {
+              "name": "enable_versioning",
+              "type": "bool",
+              "description": "Enable S3 bucket versioning. Security-first default: enabled.",
+              "default_value": true,
+              "validation_rules": [
+                "boolean"
+              ],
+              "sensitive": false,
+              "justification": "Versioning provides protection against accidental deletes and supports immutable/append-only patterns; enabled by default per architecture patterns."
+            },
+            {
+              "name": "mfa_delete",
+              "type": "bool",
+              "description": "Enable MFA Delete for the bucket versioning (note: requires root account MFA and is hard to automate).",
+              "default_value": false,
+              "validation_rules": [
+                "boolean",
+                "document operational constraints: can only be changed by root with MFA"
+              ],
+              "sensitive": false,
+              "justification": "Optional protection for critical buckets; default false because MFA Delete complicates automation and Terraform use."
+            },
+            {
+              "name": "enable_object_lock",
+              "type": "bool",
+              "description": "Enable S3 Object Lock at bucket creation for write-once-read-many (WORM) use cases.",
+              "default_value": false,
+              "validation_rules": [
+                "boolean",
+                "must be set at bucket creation time; cannot be enabled on existing buckets"
+              ],
+              "sensitive": false,
+              "justification": "Supports immutable storage pattern where required. Default off to avoid accidental irreversible behavior."
+            },
+            {
+              "name": "sse_algorithm",
+              "type": "string",
+              "description": "Server-side encryption algorithm to apply by default to objects placed in the bucket.",
+              "default_value": "aws:kms",
+              "validation_rules": [
+                "one of: AES256, aws:kms",
+                "if aws:kms then kms_key_id is recommended"
+              ],
+              "sensitive": false,
+              "justification": "Default to SSE-KMS for auditability and fine-grained access control, aligning with security pillar."
+            },
+            {
+              "name": "kms_key_id",
+              "type": "string",
+              "description": "Optional KMS key ARN or key id to use for SSE-KMS encryption (customer-managed key recommended).",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, must be a valid KMS ARN or Key ID (arn:aws:kms:...:key/...)",
+                "ensure key policy allows s3:PutObject and s3:GetObject for bucket and s3.amazonaws.com"
+              ],
+              "sensitive": false,
+              "justification": "Allows customers to supply a CMK for encryption, supporting audit and key rotation. Kept optional to allow usage of AWS-managed S3 key when explicit CMK is not provided."
+            },
+            {
+              "name": "bucket_key_enabled",
+              "type": "bool",
+              "description": "Enable S3 Bucket Keys to reduce KMS requests when using SSE-KMS.",
+              "default_value": true,
+              "validation_rules": [
+                "boolean",
+                "applicable only when sse_algorithm = aws:kms"
+              ],
+              "sensitive": false,
+              "justification": "Reduces KMS request costs and improves performance for high-throughput buckets using SSE-KMS."
+            },
+            {
+              "name": "public_access_block",
+              "type": "object",
+              "description": "Public access block configuration for the bucket.",
+              "default_value": {
+                "block_public_acls": true,
+                "block_public_policy": true,
+                "ignore_public_acls": true,
+                "restrict_public_buckets": true
+              },
+              "validation_rules": [
+                "object with booleans: block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets"
+              ],
+              "sensitive": false,
+              "justification": "Deny-by-default public exposure; secure defaults set to block public access as recommended by security patterns."
+            },
+            {
+              "name": "lifecycle_rules",
+              "type": "list",
+              "description": "Optional lifecycle rules (transitions/expiration/noncurrent rules) to manage cost and retention.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, rules must include storage_class values that are valid S3 storage classes",
+                "recommend at minimum: expiration for incomplete multipart uploads"
+              ],
+              "sensitive": false,
+              "justification": "Allows tailored lifecycle management for cost and retention alignment; if omitted, module will not set lifecycle rules."
+            },
+            {
+              "name": "logging_bucket",
+              "type": "string",
+              "description": "Bucket name or ARN to receive server access logs. Recommended to be a dedicated, centralized logs bucket.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, must be a valid S3 bucket name or ARN",
+                "target bucket must grant write permission for s3 server access logs"
+              ],
+              "sensitive": false,
+              "justification": "Separates operational logs from data buckets and satisfies WAF OpsEx requirements for access logging."
+            },
+            {
+              "name": "cloudtrail_arn",
+              "type": "string",
+              "description": "Optional CloudTrail ARN for guidance and documentation to enable data events for this bucket (not created by this module).",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided must be a valid ARN: arn:aws:cloudtrail:*:*:trail/*"
+              ],
+              "sensitive": false,
+              "justification": "Encourages enabling CloudTrail data events for object-level auditing as part of security and compliance."
+            },
+            {
+              "name": "monitoring_role_arn",
+              "type": "string",
+              "description": "Optional IAM role ARN used by monitoring/integration runbooks (for e.g., automated remediation or cross-account metrics).",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, must be a valid IAM role ARN (arn:aws:iam::123456789012:role/...)"
+              ],
+              "sensitive": false,
+              "justification": "Facilitates integration with monitoring/automation tooling while following least-privilege via a dedicated role."
+            },
+            {
+              "name": "expected_bucket_owner",
+              "type": "string",
+              "description": "Optional AWS account ID expected to own the bucket; used to prevent cross-account mistakes.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, must match 12-digit account ID: ^\\d{12}$"
+              ],
+              "sensitive": false,
+              "justification": "Prevents accidental operations on buckets owned by other accounts; recommended for cross-account safe-guards."
+            },
+            {
+              "name": "external_principals",
+              "type": "map",
+              "description": "Optional map of external/cross-account principals (ARN => description) to include in bucket policy when cross-account access is required.",
+              "default_value": {},
+              "validation_rules": [
+                "map of principal ARN to purpose string",
+                "validate that ARNs match arn:aws:iam::*:role/* or arn:aws:iam::*:user/* or arn:aws:sts::*:assumed-role/*"
+              ],
+              "sensitive": false,
+              "justification": "Supports cross-account access scenarios while centralizing policy generation and encouraging least-privilege entries."
+            },
+            {
+              "name": "tags",
+              "type": "map",
+              "description": "Additional tags to apply to the bucket. Module enforces required tags if not provided.",
+              "default_value": {},
+              "validation_rules": [
+                "must include keys: Environment, Application, CostCenter, Owner, ManagedBy, Module, CreatedDate (module will populate defaults for Module and ManagedBy if omitted)",
+                "keys and values should be strings"
+              ],
+              "sensitive": false,
+              "justification": "Ensures tagging compliance for cost allocation, ownership, and automation. Module will merge provided tags with mandatory tags."
+            },
+            {
+              "name": "transfer_acceleration",
+              "type": "string",
+              "description": "Configure Transfer Acceleration status.",
+              "default_value": "Suspended",
+              "validation_rules": [
+                "one of: Enabled, Suspended"
+              ],
+              "sensitive": false,
+              "justification": "Expose transfer acceleration opt-in; default Suspended to avoid unexpected costs."
+            },
+            {
+              "name": "replication_configuration",
+              "type": "list",
+              "description": "Optional replication configuration blocks (left as advanced usage). Module will accept a pre-built replication configuration if provided.",
+              "default_value": null,
+              "validation_rules": [
+                "nullable",
+                "if provided, role ARN must be valid and destination bucket ARNs must be valid"
+              ],
+              "sensitive": false,
+              "justification": "Supports reliability pattern (cross-region replication) when customers provide role and destination configuration."
+            }
+          ],
+          "output_definitions": [
+            {
+              "name": "bucket_id",
+              "description": "The bucket id (name) created or managed by this module.",
+              "value_expression": "aws_s3_bucket.this.id",
+              "sensitive": false,
+              "justification": "Primary identifier for downstream modules and IAM policies; used for composition and referencing."
+            },
+            {
+              "name": "bucket_arn",
+              "description": "ARN of the S3 bucket.",
+              "value_expression": "aws_s3_bucket.this.arn",
+              "sensitive": false,
+              "justification": "Required for IAM policies, CloudWatch metrics filters, and cross-resource composition."
+            },
+            {
+              "name": "bucket_domain_name",
+              "description": "Bucket domain name (s3-compatible endpoint).",
+              "value_expression": "aws_s3_bucket.this.bucket_domain_name",
+              "sensitive": false,
+              "justification": "Useful for DNS, applications and integrating with external systems that need the domain endpoint."
+            },
+            {
+              "name": "bucket_regional_domain_name",
+              "description": "Regional domain name for the bucket.",
+              "value_expression": "aws_s3_bucket.this.bucket_regional_domain_name",
+              "sensitive": false,
+              "justification": "Needed for region-specific endpoints and integrations."
+            },
+            {
+              "name": "hosted_zone_id",
+              "description": "Hosted zone ID for the S3 bucket (useful for Route53 alias records for website endpoints when applicable).",
+              "value_expression": "aws_s3_bucket.this.hosted_zone_id",
+              "sensitive": false,
+              "justification": "Enables DNS configuration and website hosting integration."
+            },
+            {
+              "name": "website_endpoint",
+              "description": "Website endpoint if static website hosting is enabled for this bucket.",
+              "value_expression": "aws_s3_bucket.this.website_endpoint",
+              "sensitive": false,
+              "justification": "Exposes website URL when hosting is required by the data lifecycle (optional)."
+            },
+            {
+              "name": "versioning_status",
+              "description": "Current versioning status of the bucket (Enabled/Suspended).",
+              "value_expression": "aws_s3_bucket_versioning.this.versioning_status",
+              "sensitive": false,
+              "justification": "Allows downstream modules and automation to reason about protection state and recovery options."
+            },
+            {
+              "name": "sse_algorithm",
+              "description": "Server-side encryption algorithm applied by default to bucket objects.",
+              "value_expression": "aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm",
+              "sensitive": false,
+              "justification": "Needed for compliance checks and to inform downstream consumers of encryption expectations."
+            },
+            {
+              "name": "kms_key_arn",
+              "description": "KMS key ARN used for SSE-KMS (if provided).",
+              "value_expression": "var.kms_key_id != null ? var.kms_key_id : \"\"",
+              "sensitive": false,
+              "justification": "Expose KMS key reference for audit and downstream resource permissions; blank if not set."
+            },
+            {
+              "name": "public_access_block_id",
+              "description": "ID of the public access block resource applied to the bucket.",
+              "value_expression": "aws_s3_bucket_public_access_block.this.id",
+              "sensitive": false,
+              "justification": "Useful to verify enforcement of public access protections and for automation checks."
+            },
+            {
+              "name": "logging_target_bucket",
+              "description": "Configured server access logs target bucket (if provided).",
+              "value_expression": "var.logging_bucket != null ? var.logging_bucket : \"\"",
+              "sensitive": false,
+              "justification": "Exposes where logs are delivered so operations teams can validate log delivery and retention."
+            }
+          ],
+          "security_considerations": [
+            "Enable bucket-level Public Access Block with all protections (block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets) by default to enforce deny-by-default public exposure.",
+            "Default server-side encryption to aws:kms and recommend supplying a customer-managed KMS key (kms_key_id) for auditability and fine-grained access controls; enable S3 Bucket Keys to reduce KMS usage costs.",
+            "Enable versioning by default to protect against accidental deletion; provide guidance for MFA Delete but do not enable by default due to automation constraints.",
+            "Enforce least-privilege in bucket policy generation; prefer IAM roles and principals rather than public ACLs. Validate and restrict external_principals to explicit ARNs.",
+            "Integrate CloudTrail data events for object-level auditing (recommend enabling externally) and require server access logging to a dedicated log bucket for operational investigation.",
+            "Use expected_bucket_owner guardrails (when interacting cross-account) to prevent accidental modifications to buckets in other accounts.",
+            "Avoid enabling force_destroy in production; require explicit approval in automation pipelines if set true to avoid data loss.",
+            "If object lock is required, ensure it is enabled at bucket creation and document legal/retention implications; validate default_retention mode and duration carefully.",
+            "Validate all ARNs and account IDs (KMS ARNs, IAM role ARNs, CloudTrail ARN, expected_bucket_owner) before applying changes.",
+            "Document and require tag keys for ownership and cost tracking: Environment, Application, CostCenter, Owner, ManagedBy, Module, CreatedDate to support governance and incident response."
+          ],
+          "reusability_guidance": {
+            "naming_conventions": [
+              "Use lowercase_with_underscores for local variables and outputs, e.g., environment, application, bucket_name",
+              "Bucket resource names: [environment]-[application]-s3-[purpose] (kebab for S3 bucket actual name to meet S3 naming rules)",
+              "Module label/tag Module should be: s3_bucket_[pattern] (e.g., s3_bucket_secure_vault) for clarity",
+              "When generating bucket names from prefix: [environment]-[application]-[purpose]-<random-suffix>"
+            ],
+            "tagging_strategy": [
+              "Enforce required tags: Environment, Application, CostCenter, Owner, ManagedBy, Module, CreatedDate",
+              "Module should merge user-provided tags with mandatory tags, never overwrite mandatory tags",
+              "Use CreatedDate in ISO-8601 (YYYY-MM-DD) to support lifecycle/retention automation",
+              "Include tagging for confidentiality classification where applicable (e.g., Classification=PII) but avoid storing secrets in tags"
+            ],
+            "composability_hints": [
+              "Expose bucket_arn and bucket_id outputs for downstream modules (e.g., IAM role attachments, Lambda triggers, Glue jobs).",
+              "Accept kms_key_id as an input to integrate with centralized key management and avoid creating keys inside this module.",
+              "Do not create CloudTrail or KMS resources by default; accept ARNs/IDs so the module composes with organization-level security resources.",
+              "Support optional replication_configuration input to integrate with a separate cross-region replication module.",
+              "Expose boolean flags and structured lifecycle rules so the data-lake pattern (raw/curated prefixes) can be configured by higher-level modules."
+            ],
+            "best_practices": [
+              "Keep policy JSON generation via data.aws_iam_policy_document to avoid brittle string templates and to allow easier composition.",
+              "Provide example presets in examples/ for common patterns (immutable retention, secure vault, data lake landing) to accelerate safe adoption.",
+              "Implement automated tests (unit via terraform validate + integration with a sandbox account) to ensure policy and encryption behaviors are correct.",
+              "Document operational runbooks for recovery tasks: versioned object recovery, removing delete markers, restoring from Glacier, and responding to public access alerts.",
+              "Favor customer-managed KMS keys for sensitive data; centralize key management to enable uniform rotation and access auditing."
+            ]
+          },
+          "implementation_notes": [
+            "Complexity assessment: 6 S3-related resources => medium complexity. Recommended 8 files to separate concerns (main, variables, outputs, versions, security, lifecycle, monitoring, examples).",
+            "Enforce validation for all ARNs (KMS, IAM roles, CloudTrail) and account IDs using regex patterns in variables.tf to fail fast on invalid inputs.",
+            "Security-first defaults: public access blocked, SSE-KMS default, versioning enabled, lifecycle rules for incomplete multipart uploads and transition to infrequent/archival classes when provided.",
+            "When enabling object_lock, document that the bucket must be created with object_lock_enabled and that it cannot be enabled later. Provide a separate example for object lock usage.",
+            "Do not create CloudTrail or KMS resources in this module by default; accept references to organization-managed resources for centralized control and auditing.",
+            "Provide module-level helper locals.tf to construct canonical names and merged tags (ensuring required tags are present).",
+            "Include clear examples showing how to supply kms_key_id, logging_bucket, and cloudtrail_arn to meet WAF OpsEx and Security pillars.",
+            "Add terraform-docs and README.md (not listed as a required file here) instructions for module consumers: usage patterns, required IAM permissions for deployer, and known service limits.",
+            "Testing: include an examples/ folder with at least one live test configuration and guidance for a CI pipeline that runs terraform init/validate/plan.",
+            "WAF mapping per file: monitoring.tf -> OpsEx (access logs, CloudWatch metrics), security.tf -> Security (public access block, policy), lifecycle.tf -> Reliability/Cost/Sustainability (transitions/expiry), main.tf -> Reliability/Performance (versioning, transfer acceleration hooks)."
+          ]
+        }
+      ]
+    },
+    "module_structure_plan_complete": true,
+    "configuration_optimizer_data": {
+      "configuration_optimizers": [
+        {
+          "service_name": "s3",
+          "cost_optimizations": [
+            {
+              "resource_name": "aws_s3_bucket.this",
+              "current_configuration": "Standard storage class with no lifecycle policies.",
+              "optimized_configuration": "Implement lifecycle policies to transition objects to S3 Intelligent-Tiering or Glacier after 30 days.",
+              "estimated_savings": "20%",
+              "justification": "Transitioning infrequently accessed data to lower-cost storage classes reduces overall storage costs."
+            }
+          ],
+          "performance_optimizations": [
+            {
+              "resource_name": "aws_s3_bucket.this",
+              "current_configuration": "Default bucket configuration without Transfer Acceleration.",
+              "optimized_configuration": "Enable Transfer Acceleration for faster uploads from geographically diverse locations.",
+              "performance_impact": "Improved upload speeds by up to 50% for global users.",
+              "justification": "Transfer Acceleration optimizes data transfer speeds, enhancing performance for users accessing the bucket from various locations."
+            }
+          ],
+          "security_optimizations": [
+            {
+              "resource_name": "aws_s3_bucket_public_access_block.this",
+              "security_issue": "Potential for public access to sensitive data.",
+              "current_configuration": "Public access block settings not fully enforced.",
+              "secure_configuration": "Enable all public access block settings: block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets.",
+              "severity": "high",
+              "justification": "Enforcing public access block settings ensures that sensitive data is not inadvertently exposed to the public."
+            }
+          ],
+          "syntax_validations": [
+            {
+              "file_name": "main.tf",
+              "validation_status": "Valid",
+              "issues_found": [],
+              "recommendations": []
+            }
+          ],
+          "naming_conventions": [
+            {
+              "resource_type": "bucket",
+              "current_name": "mybucket",
+              "recommended_name": "myapp-prod-us-east-1-bucket",
+              "convention_rule": "Use lowercase-hyphen format with app, environment, and region."
+            }
+          ],
+          "tagging_strategies": [
+            {
+              "resource_name": "aws_s3_bucket.this",
+              "required_tags": {
+                "Name": "myapp-prod-us-east-1-bucket",
+                "Environment": "prod",
+                "Owner": "team@example.com",
+                "Application": "myapp",
+                "CostCenter": "CC123",
+                "DataClassification": "Confidential",
+                "ManagedBy": "Terraform",
+                "TerraformModule": "s3_bucket"
+              },
+              "optional_tags": {},
+              "tagging_justification": "Ensures compliance with organizational standards for cost allocation and governance."
+            }
+          ],
+          "estimated_monthly_cost": "150",
+          "optimization_summary": "Optimizations include cost-saving lifecycle policies, performance enhancements through Transfer Acceleration, and security hardening with public access blocks.",
+          "implementation_priority": [
+            "Implement lifecycle policies for cost savings",
+            "Enable Transfer Acceleration for performance",
+            "Enforce public access block settings for security",
+            "Update naming conventions for compliance",
+            "Apply required tags for governance"
+          ]
+        }
+      ]
+    },
+    "configuration_optimizer_complete": true,
+    "state_management_data": {
+      "state_management_plans": [
+        {
+          "service_name": "s3",
+          "infrastructure_scale": "medium",
+          "backend_configuration": {
+            "bucket_name": "org-terraform-state-s3-us-east-1",
+            "key_pattern": "terraform/states/${team}/${env}/s3.tfstate",
+            "region": "us-east-1",
+            "encrypt": true,
+            "versioning": true,
+            "kms_key_id": "arn:aws:kms:us-east-1:123456789012:alias/tfstate-us-east-1",
+            "server_side_encryption_configuration": {
+              "Rule": {
+                "ApplyServerSideEncryptionByDefault": {
+                  "SSEAlgorithm": "aws:kms",
+                  "KMSMasterKeyID": "arn:aws:kms:us-east-1:123456789012:alias/tfstate-us-east-1"
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          },
+          "state_locking_configuration": {
+            "table_name": "terraform-locks-s3-us-east-1",
+            "billing_mode": "PAY_PER_REQUEST",
+            "hash_key": "LockID",
+            "region": "us-east-1",
+            "point_in_time_recovery": true,
+            "tags": {
+              "Owner": "platform",
+              "Service": "s3",
+              "Environment": "shared",
+              "Compliance": "SOC2-ISO27001"
+            }
+          },
+          "state_splitting_strategy": {
+            "splitting_approach": "Split by environment (dev/staging/prod) and by team ownership; single service-specific state per team per environment for S3. Platform team manages shared account-wide S3 resources; development and operations manage per-team buckets and lifecycle rules.",
+            "state_files": [
+              {
+                "name": "platform/shared-s3",
+                "path": "terraform/states/platform/prod/s3-shared.tfstate",
+                "description": "Platform-managed shared S3 resources (logging buckets, cross-account replication targets, central KMS keys). Managed by 'platform' team; used by operations for global config."
+              },
+              {
+                "name": "development/team-s3-dev",
+                "path": "terraform/states/development/dev/s3.tfstate",
+                "description": "Development team S3 resources for dev environment (per-team buckets, objects lifecycle)."
+              },
+              {
+                "name": "operations/team-s3-staging",
+                "path": "terraform/states/operations/staging/s3.tfstate",
+                "description": "Operations-managed S3 resources for staging; used for testing pipelines and pre-prod validations."
+              },
+              {
+                "name": "development/team-s3-prod",
+                "path": "terraform/states/development/prod/s3.tfstate",
+                "description": "Production S3 resources owned by 'development' team. Strict access controls; subject to SOC2 and ISO-27001 controls."
+              }
+            ],
+            "dependencies": [
+              {
+                "from": "platform/shared-s3",
+                "to": "development/*",
+                "type": "exposes_logging_bucket_and_replication_target",
+                "description": "Development and operations states reference outputs (logging bucket ARN, replication target) from platform/shared-s3 via terraform_remote_state."
+              },
+              {
+                "from": "platform/shared-s3",
+                "to": "operations/*",
+                "type": "kms_and_logging_reference",
+                "description": "KMS key and centralized logging bucket are provided by platform/shared-s3 and referenced by team states for consistent encryption and audit."
+              }
+            ],
+            "data_source_usage": [
+              "Use terraform_remote_state to pull only required outputs (e.g., logging_bucket_arn, replication_role_arn, kms_key_id) rather than broad state access.",
+              "Keep cross-state references minimal and read-only; avoid circular dependencies by modeling shared resources in platform/shared-s3.",
+              "For CI/CD, limit remote_state access to specific job roles/credentials rather than repo-level secrets where possible."
+            ]
+          },
+          "security_recommendations": {
+            "iam_policies": [
+              {
+                "name": "TerraformBackendReadWrite_CI",
+                "principal": "arn:aws:iam::123456789012:role/github-actions-tf",
+                "actions": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject",
+                  "s3:GetObjectVersion",
+                  "s3:ListBucket"
+                ],
+                "resource": "arn:aws:s3:::org-terraform-state-s3-us-east-1/*",
+                "justification": "Least-privilege policy for GitHub Actions runner used by development and operations teams to perform terraform init/plan/apply for S3 resources."
+              },
+              {
+                "name": "TerraformLockingRole",
+                "principal": "arn:aws:iam::123456789012:role/terraform-locks",
+                "actions": [
+                  "dynamodb:GetItem",
+                  "dynamodb:PutItem",
+                  "dynamodb:DeleteItem",
+                  "dynamodb:UpdateItem"
+                ],
+                "resource": "arn:aws:dynamodb:us-east-1:123456789012:table/terraform-locks-s3-us-east-1",
+                "justification": "Role used by Terraform CLI/CI to acquire and release locks; PAY_PER_REQUEST reduces ops overhead for low concurrency."
+              },
+              {
+                "name": "KMSUseForTerraform",
+                "principal": "arn:aws:iam::123456789012:role/github-actions-tf",
+                "actions": [
+                  "kms:Encrypt",
+                  "kms:Decrypt",
+                  "kms:GenerateDataKey*",
+                  "kms:DescribeKey"
+                ],
+                "resource": "arn:aws:kms:us-east-1:123456789012:key/alias/tfstate-us-east-1",
+                "justification": "Allows CI and authorized admin roles to use CMK for S3 object encryption/decryption."
+              }
+            ],
+            "bucket_policies": [
+              {
+                "statement": "Deny insecure transport",
+                "effect": "Deny",
+                "principals": "*",
+                "actions": "s3:*",
+                "conditions": {
+                  "Bool": {
+                    "aws:SecureTransport": "false"
+                  }
+                },
+                "justification": "Require HTTPS for all access to backend bucket to meet SOC2 controls."
+              },
+              {
+                "statement": "Restrict put/get to specific roles and principals",
+                "effect": "Allow",
+                "principals": [
+                  "arn:aws:iam::123456789012:role/github-actions-tf",
+                  "arn:aws:iam::123456789012:role/terraform-admins"
+                ],
+                "actions": [
+                  "s3:GetObject",
+                  "s3:PutObject",
+                  "s3:DeleteObject",
+                  "s3:GetObjectVersion"
+                ],
+                "resources": "arn:aws:s3:::org-terraform-state-s3-us-east-1/*",
+                "justification": "Limit state read/write to CI and administrative roles; prevents broad IAM users access."
+              }
+            ],
+            "access_controls": [
+              "Enforce least privilege: separate roles for CI (GitHub Actions), developers, and admins. Developers get plan/read; only CI or on-call admins may apply in prod.",
+              "Use IAM conditions to restrict operations by source VPC/IP where applicable for operations team.",
+              "Enable short-lived credentials for CI via OIDC (GitHub Actions) to avoid static secrets and improve auditability."
+            ],
+            "monitoring": [
+              "Enable AWS CloudTrail for all management and data events on the backend S3 bucket to satisfy audit logging requirement.",
+              "Enable S3 server access logging to a dedicated logging bucket (owned by platform/shared-s3) and restrict access to operations and platform teams.",
+              "Create CloudWatch alarms for: (a) DynamoDB throttling or increased ConsumedCapacity, (b) S3 PutObject/DeleteObject patterns outside expected usage, (c) KMS key policy changes.",
+              "Integrate CloudTrail and CloudWatch logs with centralized SIEM (to meet SOC2/ISO-27001 evidence requirements)."
+            ]
+          },
+          "migration_plan": [],
+          "implementation_steps": [
+            "CHECKLIST: 1) Create KMS key and define key policy (platform-managed). 2) Create S3 backend bucket with server-side encryption and versioning. 3) Create DynamoDB table for locking with PITR. 4) Configure IAM roles for CI (GitHub Actions), developers, and admins.",
+            "Step 1 - Provision infrastructure for backend (platform): create KMS CMK alias/tfstate-us-east-1 with key rotation enabled; attach key policy permitting platform admins and GitHub Actions role usage.",
+            "Step 2 - Create S3 backend bucket org-terraform-state-s3-us-east-1 in us-east-1: enable Versioning, Block Public Access, default encryption using the CMK, enable BucketKey (to reduce KMS costs), and enforce TLS-only access via bucket policy.",
+            "Step 3 - Configure S3 lifecycle rules: keep non-current versions for 30 days, then transition to S3 Glacier Flexible Retrieval (or Deep Archive) per cost profile; retain encrypted versions to meet 30-day backup retention requirement.",
+            "Step 4 - Create DynamoDB table terraform-locks-s3-us-east-1 with PAY_PER_REQUEST billing, primary hash key LockID, enable Point-In-Time Recovery (PITR) and tags for compliance tracking.",
+            "Step 5 - Configure CloudTrail (read/write) and S3 server access logging: direct logs to platform/shared-logs; ensure CloudTrail logs are encrypted with a separate CMK and retention/archival per SOC2/ISO-27001.",
+            "Step 6 - Set up IAM roles and policies: create minimal policies for GitHub Actions OIDC role, Terraform admins, and read-only developers. Attach resource-scoped policies for S3/DynamoDB/KMS as specified.",
+            "Step 7 - GitHub Actions integration: configure OIDC trust between GitHub and AWS to assume the github-actions-tf role; limit permissions to the specific repo and workflows. Configure secrets for any remaining required values.",
+            "Step 8 - Initialize Terraform for each team/environment: use backend key pattern terraform/states/${team}/${env}/s3.tfstate; run terraform init and terraform plan in CI with the new backend. For environments with no prior state (dev/staging/prod empty), initialize remote state directly.",
+            "Step 9 - Validate and test: perform test applies in dev, verify locking via DynamoDB, verify S3 versions created, confirm CloudTrail and server access logs are populated, and validate alarms fire on simulated anomalous events.",
+            "Step 10 - Harden and document: publish runbook for lock contention resolution, state restore, and emergency access. Provide on-call instructions for operations to handle DynamoDB or S3 incidents."
+          ],
+          "best_practices": [
+            "Split state by environment and team to limit blast radius; keep platform-owned shared resources in a dedicated state used only for shared outputs.",
+            "Use a CMK (customer-managed KMS) for S3 server-side encryption to meet SOC2/ISO-27001 key management controls and enable key rotation.",
+            "Prefer PAY_PER_REQUEST DynamoDB for low concurrency to minimize ops and cost; revisit to PROVISIONED if concurrent_operations increases.",
+            "Use OIDC for GitHub Actions to avoid long-lived credentials; scope the role to only required S3/DynamoDB/KMS permissions.",
+            "Keep terraform_remote_state usage minimal: fetch only necessary outputs and avoid writing to other states to prevent tight coupling.",
+            "Enforce strict bucket policies (deny unencrypted and unauthenticated access) and block public access at the bucket level."
+          ],
+          "monitoring_setup": [
+            "CloudTrail enabled (management and data events) with logs forwarded to platform/shared-logs and SIEM for retention and audit reporting.",
+            "S3 Server Access Logging enabled to platform/shared-logs bucket; lifecycle rules applied to logs for 365+ day retention as per ISO/SOC evidence needs.",
+            "CloudWatch Alarms: monitor DynamoDB ConsumedCapacity/Throttling, S3 4xx/5xx error rates, unexpected DeleteObject activity, and KMS policy changes.",
+            "SNS notifications integrated with on-call (PagerDuty/Slack) for critical alerts (lock failures, encryption failures, retention policy modifications)."
+          ],
+          "disaster_recovery": [
+            "Enable S3 Cross-Region Replication (CRR) for the backend bucket to a secondary region (recommended: us-west-2) to provide regional disaster recovery even though multi_region is false; replicate only encrypted objects and maintain versioning in target bucket.",
+            "Maintain S3 lifecycle + versioning with 30-day recoverable retention; transition older versions to Glacier for cost optimization but ensure 30-day restore window.",
+            "Enable DynamoDB Point-In-Time Recovery (PITR) and schedule daily on-demand backups retained for 30 days; document restore procedures for lock table recovery.",
+            "Daily export of backend state snapshots to a separate, locked backup bucket (read-only, cross-account replicate to a backup account) to allow manual recovery if both primary and CRR buckets are impacted.",
+            "Run periodic DR drills: simulate restore of a state file from version history or backup, validate terraform state integrity (terraform state pull + plan), and document RTO/RPO aligned with platform SLAs."
+          ]
+        }
+      ]
+    },
+    "state_management_complete": true,
+    "execution_plan_data": {
+        "execution_plans": [
+              {
+                "service_name": "s3",
+                "module_name": "enterprise_s3_bucket",
+                "target_environment": "prod",
+                "plan_generation_timestamp": "2024-06-01T12:00:00+00:00",
+                "terraform_files": [
+                  {
+                    "file_name": "main.tf",
+                    "file_purpose": "Primary resource composition for the S3 bucket and related resources.",
+                    "resources_included": [
+                      "aws_s3_bucket.this",
+                      "aws_s3_bucket_versioning.this",
+                      "aws_s3_bucket_server_side_encryption_configuration.this",
+                      "aws_s3_bucket_lifecycle_configuration.this",
+                      "aws_s3_bucket_policy.this",
+                      "aws_s3_bucket_public_access_block.this"
+                    ],
+                    "dependencies": [
+                      "variables.tf",
+                      "security.tf",
+                      "lifecycle.tf",
+                      "monitoring.tf"
+                    ],
+                    "organization_rationale": "Centralizes all core S3 bucket resource definitions and their interdependencies for maintainability and clarity."
+                  },
+                  {
+                    "file_name": "variables.tf",
+                    "file_purpose": "Declare module inputs and validations.",
+                    "resources_included": [],
+                    "dependencies": [],
+                    "organization_rationale": "Separates variable declarations and validations to enforce input hygiene and enable reuse."
+                  },
+                  {
+                    "file_name": "outputs.tf",
+                    "file_purpose": "Expose computed attributes for composition and downstream modules.",
+                    "resources_included": [],
+                    "dependencies": [
+                      "main.tf"
+                    ],
+                    "organization_rationale": "Isolates outputs for easy reference and integration with other modules or automation."
+                  },
+                  {
+                    "file_name": "versions.tf",
+                    "file_purpose": "Provider and Terraform version constraints.",
+                    "resources_included": [],
+                    "dependencies": [],
+                    "organization_rationale": "Defines required Terraform and provider versions to ensure compatibility and stability."
+                  },
+                  {
+                    "file_name": "security.tf",
+                    "file_purpose": "Security-focused resources and policies.",
+                    "resources_included": [
+                      "aws_s3_bucket_public_access_block.this",
+                      "aws_s3_bucket_policy.this"
+                    ],
+                    "dependencies": [
+                      "variables.tf",
+                      "main.tf"
+                    ],
+                    "organization_rationale": "Isolates security resources and policies to emphasize security best practices and ease audits."
+                  },
+                  {
+                    "file_name": "lifecycle.tf",
+                    "file_purpose": "Lifecycle management and data protection rules.",
+                    "resources_included": [
+                      "aws_s3_bucket_lifecycle_configuration.this"
+                    ],
+                    "dependencies": [
+                      "variables.tf",
+                      "main.tf"
+                    ],
+                    "organization_rationale": "Separates lifecycle rules for cost optimization and data retention management."
+                  },
+                  {
+                    "file_name": "monitoring.tf",
+                    "file_purpose": "Observability and audit integration.",
+                    "resources_included": [],
+                    "dependencies": [
+                      "variables.tf",
+                      "main.tf"
+                    ],
+                    "organization_rationale": "Dedicated to monitoring and logging integration to support operational excellence."
+                  },
+                  {
+                    "file_name": "examples.tf",
+                    "file_purpose": "Example usage and common presets for different patterns.",
+                    "resources_included": [],
+                    "dependencies": [
+                      "variables.tf"
+                    ],
+                    "organization_rationale": "Provides reusable example configurations to accelerate adoption and ensure best practices."
+                  }
+                ],
+                "variable_definitions": [
+                  {
+                    "name": "environment",
+                    "type": "string",
+                    "description": "Deployment environment (used in naming and tags).",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "non-empty string",
+                      "recommended values: dev, test, staging, prod (enforce via CI if required)"
+                    ],
+                    "example_values": [
+                      "prod",
+                      "staging"
+                    ],
+                    "justification": "Used for consistent resource names and required tagging (Environment). Marked mandatory to ensure tag hygiene and environment isolation."
+                  },
+                  {
+                    "name": "application",
+                    "type": "string",
+                    "description": "Application or logical group owning the bucket (used in names and tags).",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "non-empty string",
+                      "lowercase, alphanumeric and hyphens recommended"
+                    ],
+                    "example_values": [
+                      "myapp",
+                      "data-lake"
+                    ],
+                    "justification": "Used for consistent naming and tagging (Application). Required for auditability and naming conventions."
+                  },
+                  {
+                    "name": "bucket_name",
+                    "type": "string",
+                    "description": "Explicit S3 bucket name. If provided, module will attempt to create/use this exact name. If null, bucket_prefix is used to generate a unique name.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, must match S3 DNS name rules: ^[a-z0-9.-]{3,63}$",
+                      "must not contain uppercase or underscores",
+                      "should not be formatted as an IP address (e.g., 192.168.5.4)"
+                    ],
+                    "example_values": [
+                      "myapp-prod-us-east-1-bucket"
+                    ],
+                    "justification": "Allows consumers to supply a deterministic bucket name when required by organizational policy or cross-account references."
+                  },
+                  {
+                    "name": "bucket_prefix",
+                    "type": "string",
+                    "description": "Prefix to generate a unique bucket name when bucket_name is not provided. Module will append a random suffix to ensure global uniqueness.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "must be 3-40 characters recommended for collision avoidance",
+                      "lowercase letters, numbers and hyphens only"
+                    ],
+                    "example_values": [
+                      "myapp-prod"
+                    ],
+                    "justification": "Enables repeatable module usage across environments/accounts without collisions while avoiding manual unique naming."
+                  },
+                  {
+                    "name": "acl",
+                    "type": "string",
+                    "description": "Canned ACL to apply to the bucket.",
+                    "default": "private",
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "one of: private, public-read, public-read-write, authenticated-read",
+                      "recommend using bucket policies for fine-grained access instead of ACLs"
+                    ],
+                    "example_values": [
+                      "private"
+                    ],
+                    "justification": "Sets a baseline ACL; default to 'private' to follow least-privilege posture. Exposed for legacy compatibility."
+                  },
+                  {
+                    "name": "force_destroy",
+                    "type": "bool",
+                    "description": "If true, removes all objects (including versioned objects) when destroying the bucket. Use with caution.",
+                    "default": false,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "boolean",
+                      "recommend false for production buckets; require explicit approval in automation if set true"
+                    ],
+                    "example_values": [
+                      false
+                    ],
+                    "justification": "Protects against accidental data loss during destroy operations; default false enforces safety."
+                  },
+                  {
+                    "name": "enable_versioning",
+                    "type": "bool",
+                    "description": "Enable S3 bucket versioning. Security-first default: enabled.",
+                    "default": true,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "boolean"
+                    ],
+                    "example_values": [
+                      true
+                    ],
+                    "justification": "Versioning provides protection against accidental deletes and supports immutable/append-only patterns; enabled by default per architecture patterns."
+                  },
+                  {
+                    "name": "mfa_delete",
+                    "type": "bool",
+                    "description": "Enable MFA Delete for the bucket versioning (note: requires root account MFA and is hard to automate).",
+                    "default": false,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "boolean",
+                      "document operational constraints: can only be changed by root with MFA"
+                    ],
+                    "example_values": [
+                      false
+                    ],
+                    "justification": "Optional protection for critical buckets; default false because MFA Delete complicates automation and Terraform use."
+                  },
+                  {
+                    "name": "enable_object_lock",
+                    "type": "bool",
+                    "description": "Enable S3 Object Lock at bucket creation for write-once-read-many (WORM) use cases.",
+                    "default": false,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "boolean",
+                      "must be set at bucket creation time; cannot be enabled on existing buckets"
+                    ],
+                    "example_values": [
+                      false
+                    ],
+                    "justification": "Supports immutable storage pattern where required. Default off to avoid accidental irreversible behavior."
+                  },
+                  {
+                    "name": "sse_algorithm",
+                    "type": "string",
+                    "description": "Server-side encryption algorithm to apply by default to objects placed in the bucket.",
+                    "default": "aws:kms",
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "one of: AES256, aws:kms",
+                      "if aws:kms then kms_key_id is recommended"
+                    ],
+                    "example_values": [
+                      "aws:kms"
+                    ],
+                    "justification": "Default to SSE-KMS for auditability and fine-grained access control, aligning with security pillar."
+                  },
+                  {
+                    "name": "kms_key_id",
+                    "type": "string",
+                    "description": "Optional KMS key ARN or key id to use for SSE-KMS encryption (customer-managed key recommended).",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, must be a valid KMS ARN or Key ID (arn:aws:kms:...:key/...)",
+                      "ensure key policy allows s3:PutObject and s3:GetObject for bucket and s3.amazonaws.com"
+                    ],
+                    "example_values": [
+                      "arn:aws:kms:us-east-1:123456789012:key/abcd-1234-efgh-5678"
+                    ],
+                    "justification": "Allows customers to supply a CMK for encryption, supporting audit and key rotation. Kept optional to allow usage of AWS-managed S3 key when explicit CMK is not provided."
+                  },
+                  {
+                    "name": "bucket_key_enabled",
+                    "type": "bool",
+                    "description": "Enable S3 Bucket Keys to reduce KMS requests when using SSE-KMS.",
+                    "default": true,
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "boolean",
+                      "applicable only when sse_algorithm = aws:kms"
+                    ],
+                    "example_values": [
+                      true
+                    ],
+                    "justification": "Reduces KMS request costs and improves performance for high-throughput buckets using SSE-KMS."
+                  },
+                  {
+                    "name": "public_access_block",
+                    "type": "object",
+                    "description": "Public access block configuration for the bucket.",
+                    "default": {
+                      "block_public_acls": true,
+                      "block_public_policy": true,
+                      "ignore_public_acls": true,
+                      "restrict_public_buckets": true
+                    },
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "object with booleans: block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets"
+                    ],
+                    "example_values": [
+                      {
+                        "block_public_acls": true,
+                        "block_public_policy": true,
+                        "ignore_public_acls": true,
+                        "restrict_public_buckets": true
+                      }
+                    ],
+                    "justification": "Deny-by-default public exposure; secure defaults set to block public access as recommended by security patterns."
+                  },
+                  {
+                    "name": "lifecycle_rules",
+                    "type": "list",
+                    "description": "Optional lifecycle rules (transitions/expiration/noncurrent rules) to manage cost and retention.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, rules must include storage_class values that are valid S3 storage classes",
+                      "recommend at minimum: expiration for incomplete multipart uploads"
+                    ],
+                    "example_values": [
+                      {
+                        "id": "transition-to-intelligent-tiering",
+                        "enabled": true,
+                        "filter": {},
+                        "transition": {
+                          "days": 30,
+                          "storage_class": "INTELLIGENT_TIERING"
+                        },
+                        "expiration": null,
+                        "noncurrent_version_transition": null,
+                        "noncurrent_version_expiration": null,
+                        "abort_incomplete_multipart_upload": {
+                          "days_after_initiation": 7
+                        }
+                      }
+                    ],
+                    "justification": "Allows tailored lifecycle management for cost and retention alignment; if omitted, module will not set lifecycle rules."
+                  },
+                  {
+                    "name": "logging_bucket",
+                    "type": "string",
+                    "description": "Bucket name or ARN to receive server access logs. Recommended to be a dedicated, centralized logs bucket.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, must be a valid S3 bucket name or ARN",
+                      "target bucket must grant write permission for s3 server access logs"
+                    ],
+                    "example_values": [
+                      "org-logs-bucket"
+                    ],
+                    "justification": "Separates operational logs from data buckets and satisfies WAF OpsEx requirements for access logging."
+                  },
+                  {
+                    "name": "cloudtrail_arn",
+                    "type": "string",
+                    "description": "Optional CloudTrail ARN for guidance and documentation to enable data events for this bucket (not created by this module).",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided must be a valid ARN: arn:aws:cloudtrail:*:*:trail/*"
+                    ],
+                    "example_values": [
+                      "arn:aws:cloudtrail:us-east-1:123456789012:trail/my-trail"
+                    ],
+                    "justification": "Encourages enabling CloudTrail data events for object-level auditing as part of security and compliance."
+                  },
+                  {
+                    "name": "monitoring_role_arn",
+                    "type": "string",
+                    "description": "Optional IAM role ARN used by monitoring/integration runbooks (for e.g., automated remediation or cross-account metrics).",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, must be a valid IAM role ARN (arn:aws:iam::123456789012:role/...)"
+                    ],
+                    "example_values": [
+                      "arn:aws:iam::123456789012:role/monitoring-role"
+                    ],
+                    "justification": "Facilitates integration with monitoring/automation tooling while following least-privilege via a dedicated role."
+                  },
+                  {
+                    "name": "expected_bucket_owner",
+                    "type": "string",
+                    "description": "Optional AWS account ID expected to own the bucket; used to prevent cross-account mistakes.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, must match 12-digit account ID: ^\\d{12}$"
+                    ],
+                    "example_values": [
+                      "123456789012"
+                    ],
+                    "justification": "Prevents accidental operations on buckets owned by other accounts; recommended for cross-account safe-guards."
+                  },
+                  {
+                    "name": "external_principals",
+                    "type": "map",
+                    "description": "Optional map of external/cross-account principals (ARN => description) to include in bucket policy when cross-account access is required.",
+                    "default": {},
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "map of principal ARN to purpose string",
+                      "validate that ARNs match arn:aws:iam::*:role/* or arn:aws:iam::*:user/* or arn:aws:sts::*:assumed-role/*"
+                    ],
+                    "example_values": [
+                      {
+                        "arn:aws:iam::111122223333:role/ReadOnlyRole": "Read-only access for auditing"
+                      }
+                    ],
+                    "justification": "Supports cross-account access scenarios while centralizing policy generation and encouraging least-privilege entries."
+                  },
+                  {
+                    "name": "tags",
+                    "type": "map",
+                    "description": "Additional tags to apply to the bucket. Module enforces required tags if not provided.",
+                    "default": {},
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "must include keys: Environment, Application, CostCenter, Owner, ManagedBy, Module, CreatedDate (module will populate defaults for Module and ManagedBy if omitted)",
+                      "keys and values should be strings"
+                    ],
+                    "example_values": [
+                      {
+                        "Environment": "prod",
+                        "Application": "myapp",
+                        "CostCenter": "CC123",
+                        "Owner": "team@example.com",
+                        "ManagedBy": "Terraform",
+                        "Module": "s3_bucket",
+                        "CreatedDate": "2024-06-01"
+                      }
+                    ],
+                    "justification": "Ensures tagging compliance for cost allocation, ownership, and automation. Module will merge provided tags with mandatory tags."
+                  },
+                  {
+                    "name": "transfer_acceleration",
+                    "type": "string",
+                    "description": "Configure Transfer Acceleration status.",
+                    "default": "Suspended",
+                    "sensitive": false,
+                    "nullable": false,
+                    "validation_rules": [
+                      "one of: Enabled, Suspended"
+                    ],
+                    "example_values": [
+                      "Enabled",
+                      "Suspended"
+                    ],
+                    "justification": "Expose transfer acceleration opt-in; default Suspended to avoid unexpected costs."
+                  },
+                  {
+                    "name": "replication_configuration",
+                    "type": "list",
+                    "description": "Optional replication configuration blocks (left as advanced usage). Module will accept a pre-built replication configuration if provided.",
+                    "default": null,
+                    "sensitive": false,
+                    "nullable": true,
+                    "validation_rules": [
+                      "nullable",
+                      "if provided, role ARN must be valid and destination bucket ARNs must be valid"
+                    ],
+                    "example_values": [
+                      {
+                        "role": "arn:aws:iam::123456789012:role/replication-role",
+                        "rules": [
+                          {
+                            "id": "replication-rule-1",
+                            "status": "Enabled",
+                            "destination": {
+                              "bucket": "arn:aws:s3:::destination-bucket"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "justification": "Supports reliability pattern (cross-region replication) when customers provide role and destination configuration."
+                  }
+                ],
+                "local_values": [
+                  {
+                    "name": "final_bucket_name",
+                    "expression": "var.bucket_name != null ? var.bucket_name : format(\"%s-%s-%s-bucket-%s\", var.application, var.environment, data.aws_region.current.name, random_id.bucket_suffix.hex)",
+                    "description": "Determines the final bucket name using explicit name or generated prefix with random suffix for uniqueness.",
+                    "depends_on": [
+                      "var.bucket_name",
+                      "var.bucket_prefix",
+                      "var.application",
+                      "var.environment",
+                      "data.aws_region.current",
+                      "random_id.bucket_suffix"
+                    ],
+                    "usage_context": "Used for all bucket resource naming to enforce naming conventions and uniqueness."
+                  },
+                  {
+                    "name": "merged_tags",
+                    "expression": "merge({\n  Name = local.final_bucket_name,\n  Environment = var.environment,\n  Owner = lookup(var.tags, \"Owner\", \"unknown\"),\n  Application = var.application,\n  CostCenter = lookup(var.tags, \"CostCenter\", \"unknown\"),\n  DataClassification = lookup(var.tags, \"DataClassification\", \"Confidential\"),\n  ManagedBy = lookup(var.tags, \"ManagedBy\", \"Terraform\"),\n  TerraformModule = lookup(var.tags, \"Module\", \"s3_bucket\"),\n  CreatedDate = formatdate(\"%Y-%m-%d\", timestamp())\n}, var.tags)",
+                    "description": "Combines mandatory organizational tags with user-provided tags, ensuring compliance and traceability.",
+                    "depends_on": [
+                      "var.tags",
+                      "var.environment",
+                      "var.application"
+                    ],
+                    "usage_context": "Applied to all resources for governance, cost allocation, and operational ownership."
+                  },
+                  {
+                    "name": "public_access_block_settings",
+                    "expression": "var.public_access_block",
+                    "description": "Public access block settings applied to the bucket to enforce deny-by-default public exposure.",
+                    "depends_on": [
+                      "var.public_access_block"
+                    ],
+                    "usage_context": "Used in aws_s3_bucket_public_access_block resource to enforce security best practices."
+                  },
+                  {
+                    "name": "lifecycle_rules_final",
+                    "expression": "var.lifecycle_rules != null ? var.lifecycle_rules : [\n  {\n    id = \"transition-to-intelligent-tiering\",\n    enabled = true,\n    filter = {},\n    transition = {\n      days = 30,\n      storage_class = \"INTELLIGENT_TIERING\"\n    },\n    expiration = null,\n    noncurrent_version_transition = null,\n    noncurrent_version_expiration = null,\n    abort_incomplete_multipart_upload = {\n      days_after_initiation = 7\n    }\n  }\n]",
+                    "description": "Provides default lifecycle rules for cost optimization if none are supplied by the user.",
+                    "depends_on": [
+                      "var.lifecycle_rules"
+                    ],
+                    "usage_context": "Used in aws_s3_bucket_lifecycle_configuration resource to implement cost-saving transitions."
+                  },
+                  {
+                    "name": "encryption_configuration",
+                    "expression": "var.sse_algorithm == \"aws:kms\" ? {\n  rule = [{\n    apply_server_side_encryption_by_default = [{\n      sse_algorithm = var.sse_algorithm,\n      kms_master_key_id = var.kms_key_id,\n      bucket_key_enabled = var.bucket_key_enabled\n    }]\n  }]\n} : {\n  rule = [{\n    apply_server_side_encryption_by_default = [{\n      sse_algorithm = var.sse_algorithm\n    }]\n  }]\n}",
+                    "description": "Configures server-side encryption with conditional KMS key usage and bucket key optimization.",
+                    "depends_on": [
+                      "var.sse_algorithm",
+                      "var.kms_key_id",
+                      "var.bucket_key_enabled"
+                    ],
+                    "usage_context": "Used in aws_s3_bucket_server_side_encryption_configuration resource to enforce encryption standards."
+                  },
+                  {
+                    "name": "transfer_acceleration_status",
+                    "expression": "var.transfer_acceleration",
+                    "description": "Transfer acceleration status to optimize upload performance for global users.",
+                    "depends_on": [
+                      "var.transfer_acceleration"
+                    ],
+                    "usage_context": "Applied to aws_s3_bucket resource to enable or suspend transfer acceleration."
+                  },
+                  {
+                    "name": "external_principals_validated",
+                    "expression": "var.external_principals",
+                    "description": "Validated map of external principals for bucket policy generation to enforce least privilege cross-account access.",
+                    "depends_on": [
+                      "var.external_principals"
+                    ],
+                    "usage_context": "Used in aws_s3_bucket_policy resource to dynamically generate policy statements."
+                  }
+                ],
+                "data_sources": [
+                  {
+                    "resource_name": "current_caller_identity",
+                    "data_source_type": "aws_caller_identity",
+                    "configuration": {},
+                    "description": "Retrieves AWS account and user information for validation and tagging.",
+                    "exported_attributes": [
+                      "account_id",
+                      "arn",
+                      "user_id"
+                    ]
+                  },
+                  {
+                    "resource_name": "current_region",
+                    "data_source_type": "aws_region",
+                    "configuration": {},
+                    "description": "Fetches the current AWS region for naming conventions and resource configuration.",
+                    "exported_attributes": [
+                      "name"
+                    ]
+                  },
+                  {
+                    "resource_name": "remote_state_platform_shared",
+                    "data_source_type": "terraform_remote_state",
+                    "configuration": {
+                      "backend": "s3",
+                      "config": {
+                        "bucket": "org-terraform-state-s3-us-east-1",
+                        "key": "terraform/states/platform/prod/s3-shared.tfstate",
+                        "region": "us-east-1",
+                        "encrypt": true
+                      }
+                    },
+                    "description": "References platform-managed shared S3 resources such as logging bucket and replication targets.",
+                    "exported_attributes": [
+                      "logging_bucket_arn",
+                      "replication_role_arn",
+                      "kms_key_id"
+                    ]
+                  },
+                  {
+                    "resource_name": "random_id_bucket_suffix",
+                    "data_source_type": "random_id",
+                    "configuration": {
+                      "byte_length": 4
+                    },
+                    "description": "Generates a random suffix for bucket name uniqueness when bucket_name is not provided.",
+                    "exported_attributes": [
+                      "hex"
+                    ]
+                  }
+                ],
+                "output_definitions": [
+                  {
+                    "name": "bucket_id",
+                    "value": "aws_s3_bucket.this.id",
+                    "description": "The bucket id (name) created or managed by this module.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Used for referencing bucket in downstream modules and IAM policies."
+                  },
+                  {
+                    "name": "bucket_arn",
+                    "value": "aws_s3_bucket.this.arn",
+                    "description": "ARN of the S3 bucket.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Required for IAM policies, CloudWatch metrics filters, and cross-resource composition."
+                  },
+                  {
+                    "name": "bucket_domain_name",
+                    "value": "aws_s3_bucket.this.bucket_domain_name",
+                    "description": "Bucket domain name (s3-compatible endpoint).",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Useful for DNS, applications and integrating with external systems that need the domain endpoint."
+                  },
+                  {
+                    "name": "bucket_regional_domain_name",
+                    "value": "aws_s3_bucket.this.bucket_regional_domain_name",
+                    "description": "Regional domain name for the bucket.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Needed for region-specific endpoints and integrations."
+                  },
+                  {
+                    "name": "hosted_zone_id",
+                    "value": "aws_s3_bucket.this.hosted_zone_id",
+                    "description": "Hosted zone ID for the S3 bucket (useful for Route53 alias records for website endpoints when applicable).",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Enables DNS configuration and website hosting integration."
+                  },
+                  {
+                    "name": "website_endpoint",
+                    "value": "aws_s3_bucket.this.website_endpoint",
+                    "description": "Website endpoint if static website hosting is enabled for this bucket.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Exposes website URL when hosting is required by the data lifecycle (optional)."
+                  },
+                  {
+                    "name": "versioning_status",
+                    "value": "aws_s3_bucket_versioning.this.versioning_status",
+                    "description": "Current versioning status of the bucket (Enabled/Suspended).",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket_versioning.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Allows downstream modules and automation to reason about protection state and recovery options."
+                  },
+                  {
+                    "name": "sse_algorithm",
+                    "value": "aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm",
+                    "description": "Server-side encryption algorithm applied by default to bucket objects.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket_server_side_encryption_configuration.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Needed for compliance checks and to inform downstream consumers of encryption expectations."
+                  },
+                  {
+                    "name": "kms_key_arn",
+                    "value": "var.kms_key_id != null ? var.kms_key_id : \"\"",
+                    "description": "KMS key ARN used for SSE-KMS (if provided).",
+                    "sensitive": false,
+                    "depends_on": [
+                      "var.kms_key_id"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Expose KMS key reference for audit and downstream resource permissions; blank if not set."
+                  },
+                  {
+                    "name": "public_access_block_id",
+                    "value": "aws_s3_bucket_public_access_block.this.id",
+                    "description": "ID of the public access block resource applied to the bucket.",
+                    "sensitive": false,
+                    "depends_on": [
+                      "aws_s3_bucket_public_access_block.this"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Useful to verify enforcement of public access protections and for automation checks."
+                  },
+                  {
+                    "name": "logging_target_bucket",
+                    "value": "var.logging_bucket != null ? var.logging_bucket : \"\"",
+                    "description": "Configured server access logs target bucket (if provided).",
+                    "sensitive": false,
+                    "depends_on": [
+                      "var.logging_bucket"
+                    ],
+                    "precondition": null,
+                    "consumption_notes": "Exposes where logs are delivered so operations teams can validate log delivery and retention."
+                  }
+                ],
+                "resource_configurations": [
+                  {
+                    "resource_address": "aws_s3_bucket.this",
+                    "resource_type": "aws_s3_bucket",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "acl": "${var.acl}",
+                      "force_destroy": "${var.force_destroy}",
+                      "versioning": {
+                        "enabled": "${var.enable_versioning}",
+                        "mfa_delete": "${var.mfa_delete}"
+                      },
+                      "server_side_encryption_configuration": "${local.encryption_configuration}",
+                      "logging": "${var.logging_bucket != null ? { target_bucket = var.logging_bucket, target_prefix = \"${local.final_bucket_name}/\" } : null}",
+                      "lifecycle_rule": "${local.lifecycle_rules_final}",
+                      "cors_rule": [],
+                      "policy": "${aws_s3_bucket_policy.this.policy}",
+                      "replication_configuration": "${var.replication_configuration != null ? var.replication_configuration : null}",
+                      "object_lock_configuration": "${var.enable_object_lock ? { object_lock_enabled = \"Enabled\" } : null}",
+                      "tags": "${local.merged_tags}",
+                      "expected_bucket_owner": "${var.expected_bucket_owner}",
+                      "acceleration_status": "${local.transfer_acceleration_status}"
+                    },
+                    "depends_on": [
+                      "aws_s3_bucket_public_access_block.this",
+                      "aws_s3_bucket_server_side_encryption_configuration.this",
+                      "aws_s3_bucket_versioning.this",
+                      "aws_s3_bucket_lifecycle_configuration.this",
+                      "aws_s3_bucket_policy.this"
+                    ],
+                    "lifecycle_rules": {
+                      "prevent_destroy": "${!var.force_destroy}"
+                    },
+                    "tags_strategy": "Enforce organizational tagging standards with mandatory and user-provided tags merged.",
+                    "parameter_justification": "Integrates naming conventions, security defaults, lifecycle cost optimizations, and performance enhancements (transfer acceleration)."
+                  },
+                  {
+                    "resource_address": "aws_s3_bucket_public_access_block.this",
+                    "resource_type": "aws_s3_bucket_public_access_block",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "block_public_acls": "${local.public_access_block_settings.block_public_acls}",
+                      "block_public_policy": "${local.public_access_block_settings.block_public_policy}",
+                      "ignore_public_acls": "${local.public_access_block_settings.ignore_public_acls}",
+                      "restrict_public_buckets": "${local.public_access_block_settings.restrict_public_buckets}"
+                    },
+                    "depends_on": [],
+                    "lifecycle_rules": null,
+                    "tags_strategy": "N/A",
+                    "parameter_justification": "Enforces high severity security optimization to block all public access vectors, protecting sensitive data."
+                  },
+                  {
+                    "resource_address": "aws_s3_bucket_server_side_encryption_configuration.this",
+                    "resource_type": "aws_s3_bucket_server_side_encryption_configuration",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "rule": [
+                        {
+                          "apply_server_side_encryption_by_default": [
+                            {
+                              "sse_algorithm": "${var.sse_algorithm}",
+                              "kms_master_key_id": "${var.kms_key_id}",
+                              "bucket_key_enabled": "${var.bucket_key_enabled}"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "lifecycle_rules": null,
+                    "tags_strategy": "N/A",
+                    "parameter_justification": "Implements default SSE-KMS encryption with optional customer-managed key and bucket key optimization for cost and security."
+                  },
+                  {
+                    "resource_address": "aws_s3_bucket_versioning.this",
+                    "resource_type": "aws_s3_bucket_versioning",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "versioning_configuration": {
+                        "status": "${var.enable_versioning ? \"Enabled\" : \"Suspended\"}",
+                        "mfa_delete": "${var.mfa_delete}"
+                      },
+                      "expected_bucket_owner": "${var.expected_bucket_owner}"
+                    },
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "lifecycle_rules": null,
+                    "tags_strategy": "N/A",
+                    "parameter_justification": "Enables versioning by default for data protection; MFA Delete optional due to operational constraints."
+                  },
+                  {
+                    "resource_address": "aws_s3_bucket_lifecycle_configuration.this",
+                    "resource_type": "aws_s3_bucket_lifecycle_configuration",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "rule": "${local.lifecycle_rules_final}"
+                    },
+                    "depends_on": [
+                      "aws_s3_bucket.this"
+                    ],
+                    "lifecycle_rules": null,
+                    "tags_strategy": "N/A",
+                    "parameter_justification": "Applies cost-optimized lifecycle rules transitioning data to Intelligent-Tiering or Glacier after 30 days."
+                  },
+                  {
+                    "resource_address": "aws_s3_bucket_policy.this",
+                    "resource_type": "aws_s3_bucket_policy",
+                    "resource_name": "this",
+                    "configuration": {
+                      "bucket": "${local.final_bucket_name}",
+                      "policy": "${jsonencode({\n  Version = \"2012-10-17\",\n  Statement = [\n    {\n      Sid = \"DenyPublicRead\",\n      Effect = \"Deny\",\n      Principal = \"*\",\n      Action = [\"s3:GetObject\", \"s3:ListBucket\"],\n      Resource = [\n        \"arn:aws:s3:::${local.final_bucket_name}\",\n        \"arn:aws:s3:::${local.final_bucket_name}/*\"\n      ],\n      Condition = {\n        Bool = { \"aws:SecureTransport\" = \"false\" }\n      }\n    },\n    for principal_arn, description in local.external_principals_validated : {\n      Sid = \"AllowExternalAccess${replace(principal_arn, \":\", \"_\")}\",\n      Effect = \"Allow\",\n      Principal = { AWS = principal_arn },\n      Action = [\"s3:GetObject\", \"s3:PutObject\"],\n      Resource = \"arn:aws:s3:::${local.final_bucket_name}/*\"\n    }\n  ]\n})",
+                      "expected_bucket_owner": "${var.expected_bucket_owner}"
+                    },
+                    "depends_on": [
+                      "aws_s3_bucket.this",
+                      "aws_s3_bucket_public_access_block.this"
+                    ],
+                    "lifecycle_rules": null,
+                    "tags_strategy": "N/A",
+                    "parameter_justification": "Enforces least-privilege bucket policy with deny public access and explicit external principals for cross-account access."
+                  }
+                ],
+                "iam_policies": [
+                  {
+                    "policy_name": "s3_bucket_access_policy",
+                    "version": "2012-10-17",
+                    "statements": [
+                      {
+                        "Sid": "DenyInsecureTransport",
+                        "Effect": "Deny",
+                        "Action": [
+                          "s3:GetObject",
+                          "s3:ListBucket"
+                        ],
+                        "Resource": [
+                          "arn:aws:s3:::${local.final_bucket_name}",
+                          "arn:aws:s3:::${local.final_bucket_name}/*"
+                        ],
+                        "Condition": {
+                          "Bool": {
+                            "aws:SecureTransport": "false"
+                          }
+                        },
+                        "Principal": "*"
+                      },
+                      {
+                        "Sid": "AllowExternalPrincipals",
+                        "Effect": "Allow",
+                        "Action": [
+                          "s3:GetObject",
+                          "s3:PutObject"
+                        ],
+                        "Resource": "arn:aws:s3:::${local.final_bucket_name}/*",
+                        "Principal": {
+                          "AWS": "${join(\",\", keys(var.external_principals))}"
+                        }
+                      }
+                    ],
+                    "description": "Bucket policy enforcing deny of insecure transport and allowing least-privilege external principals.",
+                    "resource_references": [
+                      "aws_s3_bucket.this"
+                    ]
+                  }
+                ],
+                "module_description": "Enterprise-grade Terraform module for AWS S3 bucket provisioning with secure defaults, cost and performance optimizations, and compliance-ready configurations. Supports versioning, encryption with KMS, lifecycle management, public access blocking, transfer acceleration, and replication. Designed for production environments with strict tagging, naming conventions, and state management integration.",
+                "usage_examples": [
+                  {
+                    "example_name": "immutable_object_storage",
+                    "configuration": "module \"immutable_storage\" {\n  source = \"./enterprise_s3_bucket\"\n  environment = \"prod\"\n  application = \"immutableapp\"\n  bucket_prefix = \"immutableapp-prod\"\n  enable_versioning = true\n  enable_object_lock = true\n  acl = \"private\"\n  sse_algorithm = \"aws:kms\"\n  kms_key_id = \"arn:aws:kms:us-east-1:123456789012:key/immutable-key\"\n  lifecycle_rules = [\n    {\n      id = \"expire-old-versions\"\n      enabled = true\n      filter = {}\n      noncurrent_version_expiration = { days = 365 }\n      abort_incomplete_multipart_upload = { days_after_initiation = 7 }\n    }\n  ]\n  tags = {\n    CostCenter = \"CC999\"\n    Owner = \"security-team@example.com\"\n  }\n}",
+                    "description": "Demonstrates a secure, immutable storage bucket with object lock enabled and strict lifecycle rules for compliance.",
+                    "expected_outputs": [
+                      "bucket_id",
+                      "bucket_arn",
+                      "versioning_status",
+                      "sse_algorithm"
+                    ],
+                    "use_case": "Use case for regulatory compliance requiring WORM storage and long-term retention."
+                  },
+                  {
+                    "example_name": "secure_storage_zone",
+                    "configuration": "module \"secure_storage\" {\n  source = \"./enterprise_s3_bucket\"\n  environment = \"prod\"\n  application = \"secureapp\"\n  bucket_name = \"secureapp-prod-us-east-1-bucket\"\n  acl = \"private\"\n  enable_versioning = true\n  sse_algorithm = \"aws:kms\"\n  kms_key_id = \"arn:aws:kms:us-east-1:123456789012:key/secure-key\"\n  public_access_block = {\n    block_public_acls = true\n    block_public_policy = true\n    ignore_public_acls = true\n    restrict_public_buckets = true\n  }\n  logging_bucket = \"org-logs-bucket\"\n  tags = {\n    CostCenter = \"CC123\"\n    Owner = \"team@example.com\"\n  }\n}",
+                    "description": "Example of a secure bucket with enforced public access block, encryption, versioning, and centralized logging.",
+                    "expected_outputs": [
+                      "bucket_id",
+                      "bucket_arn",
+                      "public_access_block_id",
+                      "logging_target_bucket"
+                    ],
+                    "use_case": "General purpose secure storage for sensitive application data with audit and compliance controls."
+                  },
+                  {
+                    "example_name": "data_lake_landing_zone",
+                    "configuration": "module \"data_lake\" {\n  source = \"./enterprise_s3_bucket\"\n  environment = \"prod\"\n  application = \"datalake\"\n  bucket_prefix = \"datalake-prod\"\n  enable_versioning = true\n  acl = \"private\"\n  sse_algorithm = \"aws:kms\"\n  kms_key_id = \"arn:aws:kms:us-east-1:123456789012:key/datalake-key\"\n  replication_configuration = [\n    {\n      role = \"arn:aws:iam::123456789012:role/datalake-replication-role\",\n      rules = [\n        {\n          id = \"replicate-to-secondary\",\n          status = \"Enabled\",\n          destination = {\n            bucket = \"arn:aws:s3:::datalake-secondary\"\n          }\n        }\n      ]\n    }\n  ]\n  tags = {\n    CostCenter = \"CC456\"\n    Owner = \"datalake-team@example.com\"\n  }\n}",
+                    "description": "Shows advanced usage with replication configuration for cross-region data lake reliability.",
+                    "expected_outputs": [
+                      "bucket_id",
+                      "bucket_arn",
+                      "replication_configuration"
+                    ],
+                    "use_case": "Data lake ingestion bucket with cross-region replication for disaster recovery and availability."
+                  }
+                ],
+                "readme_content": "# Enterprise S3 Bucket Terraform Module\n\n## Overview\nThis module provisions an AWS S3 bucket with enterprise best practices including:\n- Secure defaults: public access block, SSE-KMS encryption, versioning\n- Cost optimization: lifecycle rules transitioning to Intelligent-Tiering\n- Performance optimization: optional transfer acceleration\n- Compliance: tagging, object lock support, and audit logging\n\n## Usage\nSee `examples.tf` for common usage patterns.\n\n## Inputs\nAll variables are declared in `variables.tf` with validation and defaults.\n\n## Outputs\nExposes bucket identifiers, ARNs, encryption status, and logging targets.\n\n## State Management\nUses S3 backend with KMS encryption and DynamoDB for state locking. Supports state splitting by environment and team.\n\n## Security\nEnforces deny-by-default public access and least privilege policies.\n\n## Contributing\nPlease follow organizational guidelines for changes and testing.\n",
+                "required_providers": {
+                  "aws": {
+                    "source": "hashicorp/aws",
+                    "version": "~> 4.0"
+                  },
+                  "random": {
+                    "source": "hashicorp/random",
+                    "version": "~> 3.0"
+                  }
+                },
+                "terraform_version_constraint": ">= 1.3.0",
+                "resource_dependencies": [
+                  {
+                    "aws_s3_bucket_public_access_block.this": {
+                      "depends_on": []
+                    }
+                  },
+                  {
+                    "aws_s3_bucket.this": {
+                      "depends_on": [
+                        "aws_s3_bucket_public_access_block.this"
+                      ]
+                    }
+                  },
+                  {
+                    "aws_s3_bucket_server_side_encryption_configuration.this": {
+                      "depends_on": [
+                        "aws_s3_bucket.this"
+                      ]
+                    }
+                  },
+                  {
+                    "aws_s3_bucket_versioning.this": {
+                      "depends_on": [
+                        "aws_s3_bucket.this"
+                      ]
+                    }
+                  },
+                  {
+                    "aws_s3_bucket_lifecycle_configuration.this": {
+                      "depends_on": [
+                        "aws_s3_bucket.this"
+                      ]
+                    }
+                  },
+                  {
+                    "aws_s3_bucket_policy.this": {
+                      "depends_on": [
+                        "aws_s3_bucket.this",
+                        "aws_s3_bucket_public_access_block.this"
+                      ]
+                    }
+                  }
+                ],
+                "deployment_phases": [
+                  "Initialize backend and state locking",
+                  "Validate variables and naming conventions",
+                  "Provision core S3 bucket resource",
+                  "Apply public access block and encryption configurations",
+                  "Configure versioning and lifecycle rules",
+                  "Attach bucket policy and logging",
+                  "Output resource identifiers and metadata"
+                ],
+                "estimated_costs": {
+                  "aws_s3_bucket.this": {
+                    "current_configuration": "Standard storage class with no lifecycle policies.",
+                    "optimized_configuration": "Lifecycle policies implemented to transition objects to Intelligent-Tiering after 30 days.",
+                    "estimated_savings": "20%",
+                    "justification": "Transitioning infrequently accessed data to lower-cost storage classes reduces overall storage costs."
+                  },
+                  "aws_s3_bucket.this_transfer_acceleration": {
+                    "current_configuration": "Transfer Acceleration disabled.",
+                    "optimized_configuration": "Transfer Acceleration enabled for faster global uploads.",
+                    "estimated_savings": "N/A (performance improvement)",
+                    "justification": "Improves upload speeds by up to 50% for geographically diverse users."
+                  }
+                },
+                "validation_and_testing": [
+                  "Variable validation blocks enforce input hygiene and prevent misconfiguration.",
+                  "Unit tests for lifecycle rules and encryption configurations using terraform-compliance or Terratest.",
+                  "Integration tests in CI/CD pipeline with GitHub Actions to validate resource creation and policy enforcement.",
+                  "Manual review of generated bucket policies for least privilege and external principal correctness.",
+                  "Automated tagging compliance checks using policy-as-code tools (e.g., Sentinel, OPA)."
+                ],
+                "error": null
+              }
+            ]
+          
+    },
+    "execution_plan_complete": true,
+    "agent_completion": {
+      "agent_name": "execution_planner",
+      "task_type": "execution_plan",
+      "status": "completed",
+      "timestamp": "2025-11-09T00:42:14.666146",
+      "data_type": "execution_plan"
+    },
+    "timestamp": null
+  }
