@@ -19,6 +19,9 @@ ENV UV_FROZEN=true
 # Copy the required files first
 COPY pyproject.toml uv.lock uv-requirements.txt ./
 
+# Copy local dependency
+COPY a2ui_extenstion ./a2ui_extenstion
+
 # Python optimization and uv configuration
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -61,9 +64,15 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 # Install runtime dependencies and create application user
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    apt-get install -y --no-install-recommends ca-certificates curl unzip && \
     rm -rf /var/lib/apt/lists/* && \
     update-ca-certificates && \
+    curl -fsSL https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip -o terraform.zip && \
+    unzip terraform.zip -d /usr/local/bin/ && \
+    rm terraform.zip && \
+    curl -fsSL https://releases.hashicorp.com/terraform-mcp-server/0.5.0/terraform-mcp-server_0.5.0_linux_amd64.zip -o terraform-mcp-server.zip && \
+    unzip terraform-mcp-server.zip -d /usr/local/bin/ && \
+    rm terraform-mcp-server.zip && \
     groupadd -r app && \
     useradd -r -g app -d /app -s /bin/bash app
 
@@ -74,26 +83,24 @@ COPY --from=uv --chown=app:app /app/aws_orchestrator_agent /app/aws_orchestrator
 # Copy agent card for A2A protocol
 COPY --from=uv --chown=app:app /app/aws_orchestrator_agent/card /app/aws_orchestrator_agent/card
 
-# Get healthcheck script
-COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
-RUN chmod +x /usr/local/bin/docker-healthcheck.sh
+
+# Get entrypoint script
+COPY ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Run as non-root
 USER app
 
 # Expose port
-EXPOSE 10102
-
-# Health check
-HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
+EXPOSE 10103
 
 # Set working directory
 WORKDIR /app
 
 # Default arguments for A2A server
 ENV A2A_HOST=0.0.0.0
-ENV A2A_PORT=10102
+ENV A2A_PORT=10104
 ENV A2A_AGENT_CARD=aws_orchestrator_agent/card/aws_orchestrator_agent.json
 
 # When running the container, the entrypoint will be the aws-orchestrator-agent command
-ENTRYPOINT ["aws-orchestrator-agent", "--host", "0.0.0.0", "--port", "10102", "--agent-card", "aws_orchestrator_agent/card/aws_orchestrator_agent.json"]
+ENTRYPOINT ["docker-entrypoint.sh"]
