@@ -1,171 +1,183 @@
 """
-AWS Orchestrator Agent - A2A Server Entry Point
+AWS Orchestrator Agent — A2A Server.
 
-This is the main entry point for the AWS Orchestrator Agent service.
-It initializes the A2A server with Custom Supervisor Agent and proper configuration.
+Initializes the A2A application with the deep-agent ``SupervisorAgent``,
+wires the ``A2AExecutor``, and starts the Starlette server.
+
+Usage::
+
+    python -m aws_orchestrator_agent.server
+    python -m aws_orchestrator_agent.server --host 0.0.0.0 --port 10103
 """
 
 import json
-import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 import httpx
 import uvicorn
-
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryPushNotifier, InMemoryTaskStore
-from a2a.types import AgentCard
-
-from aws_orchestrator_agent.config.config import Config
-from aws_orchestrator_agent.core import (
-    GenericAgentExecutor,
+from a2a.server.tasks import (
+    BasePushNotificationSender,
+    InMemoryPushNotificationConfigStore,
+    InMemoryTaskStore,
 )
-from aws_orchestrator_agent.core.agents.supervisor_agent import create_supervisor_agent
-from aws_orchestrator_agent.core.agents.planner import create_planner_sub_supervisor_agent
-from aws_orchestrator_agent.core.agents.generator.generator_swarm import create_generator_swarm_agent
-from aws_orchestrator_agent.core.agents.writer.writer_react_agent import create_writer_react_agent
-from aws_orchestrator_agent.core.task_lifecycle import TaskLifecycleManager
-from aws_orchestrator_agent.utils.logger import AgentLogger, log_sync
+from a2a.types import AgentCard
+from starlette.middleware.cors import CORSMiddleware
 
-# Create agent logger for server
-server_logger = AgentLogger("AWS_ORCHESTRATOR_SERVER")
+from aws_orchestrator_agent.config import Config
+from aws_orchestrator_agent.core.a2a_executor import A2AExecutor
+from aws_orchestrator_agent.core.agents import (
+    SupervisorAgent,
+    create_supervisor_agent,
+    create_tf_coordinator,
+)
+from aws_orchestrator_agent.utils.logger import AgentLogger
+
+logger = AgentLogger("OrchestratorServer")
+
+
+# ---------------------------------------------------------------------------
+# Agent card loader
+# ---------------------------------------------------------------------------
+
+
+def load_agent_card(agent_card_path: str, host: str, port: int) -> AgentCard:
+    """Load the A2A agent card from disk, injecting the runtime URL.
+
+    Args:
+        agent_card_path: Path to the agent card JSON file.
+        host: Server host to embed in the card URL.
+        port: Server port to embed in the card URL.
+
+    Returns:
+        Populated ``AgentCard`` instance.
+    """
+    path = Path(agent_card_path)
+    with path.open() as fh:
+        data = json.load(fh)
+
+    if host and port:
+        data["url"] = f"http://{host}:{port}"
+
+    return AgentCard(**data)
+
+
+# ---------------------------------------------------------------------------
+# CLI entry-point
+# ---------------------------------------------------------------------------
 
 
 @click.command()
-@click.option('--host', 'host', help='Server host')
-@click.option('--port', 'port', type=int, help='Server port')
-@click.option('--agent-card', 'agent_card', help='Path to agent card JSON file')
-@click.option('--config-file', 'config_file', help='Path to configuration file')
-@log_sync
-def main(host: str, port: int, agent_card: str, config_file: str) -> None:
-    """
-    Main entry point for the AWS Orchestrator Agent server.
-    """
+@click.option("--host", default=None, help="Server host (default: from config)")
+@click.option("--port", type=int, default=None, help="Server port (default: from config)")
+@click.option(
+    "--agent-card",
+    default=None,
+    help="Path to agent card JSON (default: from config)",
+)
+def main(
+    host: Optional[str],
+    port: Optional[int],
+    agent_card: Optional[str],
+) -> None:
+    """Start the AWS Orchestrator A2A server."""
     try:
-        # Load configuration
+        # ── Configuration ─────────────────────────────────────────────
         config = Config()
-        if config_file:
-            custom_config = Config.load_config(config_file)
-            config = Config(custom_config)
-
-        # Use config values for host and port if not provided
-        host = host or config.a2a_server_host
-        port = port or config.a2a_server_port
-
-        # Load agent card
-        if not agent_card:
-            raise ValueError('Agent card is required')
-
-        with Path(agent_card).open() as file:
-            data = json.load(file)
-        agent_card_obj: AgentCard = AgentCard(**data)
-
-        server_logger.log_structured(
-            level="INFO",
-            message=f"Initializing AWS Orchestrator Agent with model: {config.llm_model}",
-            extra={"llm_model": config.llm_model, "host": host, "port": port}
+        resolved_host: str = host or str(config.get("A2A_HOST", "localhost"))
+        resolved_port: int = port or int(config.get("A2A_PORT", 10103))
+        agent_card_path: str = agent_card or str(
+            config.get(
+                "A2A_AGENT_CARD",
+                "aws_orchestrator_agent/card/aws_orchestrator_agent.json",
+            )
         )
 
-        # Create specialized agents for the custom supervisor
-        server_logger.log_structured(
-            level="INFO",
-            message="Creating specialized agents for custom supervisor",
-            extra={"agent_types": ["planner_sub_supervisor", "generator_swarm"]}
+        logger.info(
+            "Initializing AWS Orchestrator server",
+            extra={"host": resolved_host, "port": resolved_port, "agent_card": agent_card_path},
         )
-        
-        # Create Planner Sub-Supervisor Agent
-        planner_sub_supervisor = create_planner_sub_supervisor_agent(config=config)
-        
-        # Create Generator Swarm Agent
-        generator_swarm = create_generator_swarm_agent(config=config)
 
-        # Create Writer React Agent
-        writer_react = create_writer_react_agent(config=config)
-        
-        # Create Custom Supervisor Agent with agents
-        supervisor_agent = create_supervisor_agent(
-            agents=[planner_sub_supervisor, generator_swarm, writer_react],
+        # ── Agent card ────────────────────────────────────────────────
+        agent_card_obj = load_agent_card(agent_card_path, resolved_host, resolved_port)
+        logger.info("Agent card loaded", extra={"path": agent_card_path})
+
+        # ── TF Coordinator Deep Agent ─────────────────────────────────
+        # Instantiate the TF Coordinator sub-agent.
+        # (Initialization and MCP connection happen lazily in SupervisorAgent.initialize)
+        tf_coordinator_agent = create_tf_coordinator(config=config)
+
+        # ── Supervisor agent ──────────────────────────────────────────
+        supervisor = create_supervisor_agent(
+            agents=[tf_coordinator_agent],
             config=config,
-            name="aws-orchestrator-supervisor"
+            name="aws_orchestrator"
         )
 
-        # Verify supervisor is ready
-        if not supervisor_agent.is_ready():
-            raise RuntimeError("Supervisor agent failed to initialize properly")
-        
-        server_logger.log_structured(
-            level="INFO",
-            message="Custom Supervisor Agent initialized successfully",
-            extra={
-                "supervisor_name": supervisor_agent.name,
-                "available_agents": supervisor_agent.list_agents(),
-                "supervisor_ready": supervisor_agent.is_ready()
-            }
+        logger.info(
+            "SupervisorAgent created",
+            extra={"name": supervisor.name, "agents_count": 1},
         )
 
-        # Create Task Lifecycle Manager
-        task_lifecycle_manager = TaskLifecycleManager()
+        # ── A2A executor ──────────────────────────────────────────────
+        executor = A2AExecutor(agent=supervisor)
 
-        # Create A2A Executor with our custom supervisor agent
-        executor = GenericAgentExecutor(
-            agent=supervisor_agent
-        )
-
-        # Create HTTP client
+        # ── A2A request handler ───────────────────────────────────────
         client: httpx.AsyncClient = httpx.AsyncClient()
+        push_config_store = InMemoryPushNotificationConfigStore()
+        push_sender = BasePushNotificationSender(
+            httpx_client=client,
+            config_store=push_config_store,
+        )
 
-        # Create request handler
-        request_handler: DefaultRequestHandler = DefaultRequestHandler(
+        request_handler = DefaultRequestHandler(
             agent_executor=executor,
             task_store=InMemoryTaskStore(),
-            push_notifier=InMemoryPushNotifier(client),
+            push_config_store=push_config_store,
+            push_sender=push_sender,
         )
 
-        # Create A2A server
+        # ── Starlette app ─────────────────────────────────────────────
         server: A2AStarletteApplication = A2AStarletteApplication(
             agent_card=agent_card_obj,
             http_handler=request_handler,
         )
 
-        server_logger.log_structured(
-            level="INFO",
-            message=f"Starting AWS Orchestrator Agent server on {host}:{port}",
-            extra={
-                "host": host, 
-                "port": port, 
-                "log_level": config.log_level,
-                "supervisor_agents": supervisor_agent.list_agents()
-            }
-        )
-        uvicorn.run(
-            server.build(),  # Use the build() method to get the ASGI application
-            host=host,
-            port=port,
-            log_level=config.log_level.lower()
+        app = server.build()
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
 
-    except FileNotFoundError as e:
-        server_logger.log_structured(
-            level="ERROR",
-            message=f"File not found: {e}",
-            extra={"error": str(e)}
+        logger.info(
+            f"Starting AWS Orchestrator Server on {resolved_host}:{resolved_port}",
+            extra={"host": resolved_host, "port": resolved_port},
         )
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        server_logger.log_structured(
-            level="ERROR",
-            message=f"Invalid JSON in configuration file: {e}",
-            extra={"error": str(e)}
+
+        uvicorn.run(
+            app,
+            host=resolved_host,
+            port=resolved_port,
+            log_level=config.get("LOG_LEVEL", "INFO").lower(),
         )
+
+    except FileNotFoundError as exc:
+        logger.error(f"File not found: {exc}", extra={"error": str(exc)})
         sys.exit(1)
-    except Exception as e:
-        server_logger.log_structured(
-            level="ERROR",
-            message=f"An error occurred during server startup: {e}",
-            extra={"error": str(e), "error_type": type(e).__name__}
+    except json.JSONDecodeError as exc:
+        logger.error(f"Invalid JSON: {exc}", extra={"error": str(exc)})
+        sys.exit(1)
+    except Exception as exc:
+        logger.error(
+            f"Server startup failed: {exc}",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
         )
         sys.exit(1)
 

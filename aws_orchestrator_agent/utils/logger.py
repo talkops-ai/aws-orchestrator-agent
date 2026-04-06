@@ -1,176 +1,291 @@
-from colorama import Fore, Style
-from enum import Enum
-import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
-from functools import wraps
-import functools
-import inspect
+"""
+Logging module for AWS Orchestrator Agent.
+
+Provides color-coded, multi-sink (console + file + websocket) logging with
+both structured (JSON) and human-readable output modes.
+
+Configuration is driven by ``Config`` (from ``default.py``).  Every key is
+resolved lazily so the logger never triggers a circular import.
+
+Usage::
+
+    from aws_orchestrator_agent.utils.logger import AgentLogger
+
+    log = AgentLogger("tf-generator")
+    log.info("Module created", extra={"module": "vpc", "files": 5})
+    log.warning("Drift detected", task_id="deploy-42")
+    log.error("Validation failed", extra={"exit_code": 1})
+"""
+
+
 import json
+import logging
+import sys
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Callable, Dict, Optional
 
-# Try to import config, fallback to defaults if not available
-try:
-    from aws_orchestrator_agent.config.config import Config
-    config = Config()
-except Exception:
-    config = None
+from colorama import Fore, Style
 
-# Configure logging
-logger = logging.getLogger(__name__)
 
-class AgentColor(Enum):
-    # Planner/Orchestration Components (Green Family)
-    PLANNER_SUPERVISOR = Fore.GREEN
-    PLANNER_SUPERVISOR_STATE = Fore.LIGHTGREEN_EX
-    PLANNER_HANDOFF_TOOLS = Fore.LIGHTGREEN_EX
-    EXECUTION_PLANNER_REACT = Fore.LIGHTGREEN_EX
-    REQUIREMENTS_ANALYZER_REACT = Fore.LIGHTGREEN_EX
-    PLANNER_AGENT = Fore.GREEN
-    MODIFICATION_PLANNER = Fore.LIGHTGREEN_EX
-    
-    # Generator/Processing Components (Yellow/Magenta Family)
-    GENERATOR_SWARM = Fore.YELLOW
-    GENERATOR_STAGE_HANDOFF_MANAGER = Fore.LIGHTYELLOW_EX
-    GENERATOR_HANDOFF = Fore.MAGENTA
-    BACKEND_GENERATOR = Fore.CYAN
-    DATA_GENERATOR = Fore.LIGHTMAGENTA_EX
-    LOCAL_GENERATOR = Fore.LIGHTYELLOW_EX
-    OUTPUT_GENERATOR = Fore.LIGHTMAGENTA_EX
-    README_GENERATOR = Fore.LIGHTMAGENTA_EX
-    VARIABLE_GENERATOR = Fore.LIGHTMAGENTA_EX
-    RESOURCE_GENERATOR = Fore.LIGHTMAGENTA_EX
-    
-    # Infrastructure/Server Components (Blue Family)
-    AWS_ORCHESTRATOR_SERVER = Fore.LIGHTBLUE_EX
-    A2A_EXECUTOR = Fore.BLUE
-    SUPERVISOR = Fore.LIGHTBLUE_EX
-    SUPERVISOR_HANDOFF = Fore.LIGHTBLUE_EX
-    # Writer/Output Components (Magenta Family)
-    WRITER_REACT_AGENT = Fore.MAGENTA
-    SUPERVISOR_ADAPTER = Fore.LIGHTMAGENTA_EX
-    GENERIC_AGENT_EXECUTOR = Fore.LIGHTMAGENTA_EX
-    # Base/Default
-    BASE = Fore.WHITE
+# ---------------------------------------------------------------------------
+# Color palettes
+# ---------------------------------------------------------------------------
 
-class LogLevelColor(Enum):
-    """Enterprise-standard log level colors following traffic light semantics."""
-    DEBUG = Fore.LIGHTBLACK_EX      # Gray - Low priority
-    INFO = Fore.BLUE                # Blue - Normal operation
-    WARNING = Fore.YELLOW           # Yellow - Potential issues
-    ERROR = Fore.RED               # Red - Operation failed
-    CRITICAL = Fore.LIGHTRED_EX    # Bright Red - System failure
+class _LevelColor(Enum):
+    """Traffic-light colors for log levels."""
+    DEBUG = Fore.LIGHTBLACK_EX
+    INFO = Fore.BLUE
+    WARNING = Fore.YELLOW
+    ERROR = Fore.RED
+    CRITICAL = Fore.LIGHTRED_EX
 
-class LogLevel(Enum):
-    DEBUG = "DEBUG"
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
+
+# ---------------------------------------------------------------------------
+# Singleton config accessor (lazy — avoids circular imports)
+# ---------------------------------------------------------------------------
+
+_config_cache: Optional[Any] = ...  # sentinel: `...` means "not loaded yet"
+
+
+def _get_config() -> Any:
+    """Lazy-load Config once.  Returns the Config instance or None."""
+    global _config_cache
+    if _config_cache is ...:
+        try:
+            from aws_orchestrator_agent.config import Config
+            _config_cache = Config()
+        except Exception:
+            _config_cache = None
+    return _config_cache
+
+
+def _cfg(key: str, fallback: Any) -> Any:
+    """Read a single config value, falling back if Config isn't available."""
+    cfg = _get_config()
+    if cfg is None:
+        return fallback
+    return getattr(cfg, key, fallback)
+
+
+# ---------------------------------------------------------------------------
+# Colored console formatter (for StreamHandler)
+# ---------------------------------------------------------------------------
+
+class _ColorFormatter(logging.Formatter):
+    """
+    Applies per-level color to log records for console output.
+
+    Reads ``LOG_DATE_FORMAT`` from config for timestamp formatting.
+    Keeps ANSI codes OUT of the ``logging.FileHandler`` path automatically
+    because only the ``StreamHandler`` uses this formatter.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._date_fmt: str = _cfg("LOG_DATE_FORMAT", "%Y-%m-%dT%H:%M:%S")
+
+    def format(self, record: logging.LogRecord) -> str:
+        level = record.levelname
+        agent = getattr(record, "agent_name", "BASE")
+
+        # Only level gets color — agent name stays neutral
+        try:
+            lc = _LevelColor[level].value
+        except KeyError:
+            lc = Fore.WHITE
+
+        ts = datetime.now(timezone.utc).strftime(self._date_fmt)
+        msg = record.getMessage()
+
+        extras = getattr(record, "_structured_extra", None)
+        if extras:
+            extra_pieces = [f"{k}={v}" for k, v in extras.items()]
+            extra_str = " | " + " ".join(extra_pieces)
+        else:
+            extra_str = ""
+
+        return (
+            f"{lc}[{level}]{Style.RESET_ALL} "
+            f"{agent}: "
+            f"[{ts}] {msg}{extra_str}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Structured (JSON) formatter (for both file and console when enabled)
+# ---------------------------------------------------------------------------
+
+class _JsonFormatter(logging.Formatter):
+    """Emits each log record as a single JSON line (structured logging)."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        entry: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "agent": getattr(record, "agent_name", None),
+            "message": record.getMessage(),
+        }
+        # Merge structured extras (task_id, context_id, custom fields)
+        extras = getattr(record, "_structured_extra", None)
+        if extras:
+            entry.update(extras)
+        return json.dumps(entry, default=str)
+
+
+# ---------------------------------------------------------------------------
+# File formatter (plain text, no color codes)
+# ---------------------------------------------------------------------------
+
+class _PlainFormatter(logging.Formatter):
+    """
+    Plain-text format for file output — no ANSI escape codes.
+
+    Respects ``LOG_FORMAT`` and ``LOG_DATE_FORMAT`` from config.
+    """
+
+    def __init__(self) -> None:
+        log_fmt: str = _cfg(
+            "LOG_FORMAT",
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        date_fmt: str = _cfg("LOG_DATE_FORMAT", "%Y-%m-%d %H:%M:%S")
+        super().__init__(fmt=log_fmt, datefmt=date_fmt)
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Inject agent_name into the record so %(name)s shows it
+        record.name = getattr(record, "agent_name", record.name)
+        msg = super().format(record)
+        
+        extras = getattr(record, "_structured_extra", None)
+        if extras:
+            extra_pieces = [f"{k}={v}" for k, v in extras.items()]
+            msg += " | " + " ".join(extra_pieces)
+            
+        return msg
+
+
+# ---------------------------------------------------------------------------
+# Handler factory (creates handlers once per logger name)
+# ---------------------------------------------------------------------------
+
+_initialised_loggers: set[str] = set()
+
+
+def _ensure_handlers(py_logger: logging.Logger, agent_name: str) -> None:
+    """
+    Attach console + file handlers exactly once per logger name.
+
+    Prevents the duplicate-handler bug that occurred when multiple
+    ``AgentLogger("X")`` instances were created.
+    """
+    if py_logger.name in _initialised_loggers:
+        return
+    _initialised_loggers.add(py_logger.name)
+
+    py_logger.handlers.clear()
+    py_logger.propagate = False
+
+    level_name: str = _cfg("LOG_LEVEL", "INFO")
+    py_logger.setLevel(getattr(logging, level_name, logging.INFO))
+
+    structured: bool = _cfg("LOG_STRUCTURED_JSON", False)
+
+    # ── Console handler ──
+    if _cfg("LOG_TO_CONSOLE", True):
+        console = logging.StreamHandler(sys.stderr)
+        console.setLevel(py_logger.level)
+        console.setFormatter(_JsonFormatter() if structured else _ColorFormatter())
+        py_logger.addHandler(console)
+
+    # ── File handler ──
+    if _cfg("LOG_TO_FILE", True):
+        log_file: str = _cfg("LOG_FILE", "aws_orchestrator.log")
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setLevel(py_logger.level)
+        fh.setFormatter(_JsonFormatter() if structured else _PlainFormatter())
+        py_logger.addHandler(fh)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 class AgentLogger:
-    """Logger class for agent output with color encoding and multiple output methods."""
-    
-    def __init__(self, agent_name: str = "BASE", log_to_console: Optional[bool] = None, log_to_file: Optional[bool] = None, log_level: Optional[str] = None, log_file: Optional[str] = None) -> None:
+    """
+    Per-agent logger with color-coded console output, structured JSON support,
+    file logging, and optional websocket streaming.
+
+    Usage::
+
+        log = AgentLogger("tf-validator")
+        log.info("Starting validation")
+        log.error("terraform validate failed", extra={"exit_code": 1})
+        log.warning("Drift detected", task_id="deploy-42", context_id="sess-abc")
+    """
+
+    __slots__ = ("agent_name", "_logger", "_websocket", "_stream_fn")
+
+    def __init__(self, agent_name: str = "BASE") -> None:
         self.agent_name = agent_name
-        self.websocket = None
-        self.stream_output = None
-        # Determine config values
-        if config:
-            self.log_to_console = log_to_console if log_to_console is not None else getattr(config, 'LOG_TO_CONSOLE', True)
-            self.log_to_file = log_to_file if log_to_file is not None else getattr(config, 'LOG_TO_FILE', True)
-            self.log_level = log_level if log_level is not None else getattr(config, 'LOG_LEVEL', 'INFO')
-            self.log_file = log_file if log_file is not None else getattr(config, 'LOG_FILE', 'planner_agent.log')
-        else:
-            self.log_to_console = log_to_console if log_to_console is not None else True
-            self.log_to_file = log_to_file if log_to_file is not None else True
-            self.log_level = log_level if log_level is not None else 'INFO'
-            self.log_file = log_file if log_file is not None else 'planner_agent.log'
-        self.logger = logging.getLogger(f"{__name__}.{agent_name}")
-        self.logger.setLevel(self.log_level)
-        # Remove all handlers to avoid duplicate logs
-        self.logger.handlers = []
-        # Always use only the message, no preamble
-        formatter = logging.Formatter('%(message)s')
-        if self.log_to_file:
-            file_handler = logging.FileHandler(self.log_file)
-            file_handler.setLevel(self.log_level)
-            file_handler.setFormatter(formatter)
-            self.logger.addHandler(file_handler)
-        # Always add a stream handler for console, but only emit if log_to_console is True
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(self.log_level)
-        stream_handler.setFormatter(formatter)
-        self.logger.addHandler(stream_handler)
-        
-    def set_websocket(self, websocket: Any, stream_output: Callable) -> None:
-        """Set websocket and stream output function."""
-        self.websocket = websocket
-        self.stream_output = stream_output
-        
-    def _get_color(self, agent: str) -> str:
-        """Get color for agent."""
-        try:
-            return AgentColor[agent].value
-        except KeyError:
-            return AgentColor.BASE.value
-    
-    def _get_level_color(self, level: str) -> str:
-        """Get color for log level."""
-        try:
-            return LogLevelColor[level].value
-        except KeyError:
-            return Fore.WHITE
-            
-    def _format_log_entry(self, message: str, level: str = "INFO") -> Dict[str, Any]:
-        """Format log entry."""
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "agent": self.agent_name,
-            "message": message,
-            "level": level
-        }
-        
-    def _log_to_console(self, message: str, level: str = "INFO") -> None:
-        """Log to console with color, if enabled."""
-        if self.log_to_console:
-            agent_color = self._get_color(self.agent_name)
-            level_color = self._get_level_color(level)
-            # Format: [LEVEL] AGENT: [timestamp] message (clean format with timestamp)
-            timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+00:00"
-            formatted_message = f"{level_color}[{level}]{Style.RESET_ALL} {agent_color}{self.agent_name}{Style.RESET_ALL}: [{timestamp}] {message}"
-            print(formatted_message)
-        
-    def _log_to_file(self, message: str, level: str = "INFO") -> None:
-        """Log to file, if enabled."""
-        if self.log_to_file:
-            log_method = getattr(self.logger, level.lower())
-            log_method(message)
-        
-    async def _log_to_websocket(self, message: str) -> None:
-        """Log to websocket."""
-        if self.websocket and self.stream_output:
-            await self.stream_output("logs", self.agent_name, message, self.websocket)
-            
-    async def log(self, message: str, level: str = "INFO") -> None:
-        """Log message to all configured outputs."""
-        # Log to console
-        self._log_to_console(message, level)
-        
-        # Log to file
-        self._log_to_file(message, level)
-        
-        # Log to websocket if available
-        await self._log_to_websocket(message)
-        
-    @staticmethod
-    def format_log_message(message: str, level: str = "INFO") -> str:
-        """Format a log message."""
-        return f"[{level}] {message}"
-        
-    @classmethod
-    def create_logger(cls, agent_name: str) -> 'AgentLogger':
-        """Create a new logger instance."""
-        return cls(agent_name)
+        self._logger = logging.getLogger(f"agent.{agent_name}")
+        self._websocket: Any = None
+        self._stream_fn: Optional[Callable[..., Any]] = None
+
+        _ensure_handlers(self._logger, agent_name)
+
+    # ── Convenience level methods (sync — suitable for most call-sites) ──
+
+    def debug(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.DEBUG, msg, **kwargs)
+
+    def info(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.INFO, msg, **kwargs)
+
+    def warning(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.WARNING, msg, **kwargs)
+
+    def error(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.ERROR, msg, **kwargs)
+
+    def critical(self, msg: str, **kwargs: Any) -> None:
+        self._emit(logging.CRITICAL, msg, **kwargs)
+
+    # ── Core emit (unified path for ALL log output) ──────────────────────
+
+    def _emit(
+        self,
+        level: int,
+        message: str,
+        *,
+        task_id: Optional[str] = None,
+        context_id: Optional[str] = None,
+        extra: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Single code-path that feeds console, file, and websocket."""
+        record = self._logger.makeRecord(
+            name=self._logger.name,
+            level=level,
+            fn="",
+            lno=0,
+            msg=message,
+            args=(),
+            exc_info=None,
+        )
+        # Attach agent identity + structured extras to the record
+        record.agent_name = self.agent_name  # type: ignore[attr-defined]
+        structured_extra: dict[str, Any] = {}
+        if task_id:
+            structured_extra["task_id"] = task_id
+        if context_id:
+            structured_extra["context_id"] = context_id
+        if extra:
+            structured_extra.update(extra)
+        record._structured_extra = structured_extra  # type: ignore[attr-defined]
+
+        self._logger.handle(record)
+
+    # ── Backward-compat: log_structured() ────────────────────────────────
 
     def log_structured(
         self,
@@ -178,59 +293,49 @@ class AgentLogger:
         message: str = "",
         task_id: Optional[str] = None,
         context_id: Optional[str] = None,
-        extra: Optional[dict] = None,
+        extra: Optional[dict[str, Any]] = None,
     ) -> None:
         """
-        Log a structured message with context fields.
-        If LOG_STRUCTURED_JSON is True, outputs JSON; otherwise, outputs a formatted string.
-        All output is routed through the logger's console and file handlers, respecting config.
-        Args:
-            level: Log level (e.g., "INFO", "ERROR")
-            message: Log message
-            task_id: Optional task ID
-            context_id: Optional context/session ID
-            extra: Optional dict of extra fields (e.g., agent_name, etc.)
+        Backward-compatible structured log call.
+
+        Prefer ``log.info(...)``, ``log.error(...)`` etc. for new code.
         """
-        structured = False
-        if config:
-            structured = getattr(config, 'LOG_STRUCTURED_JSON', False)
-        log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "agent_name": getattr(self, 'agent_name', None),
-            "log_type": level,
-            "message": message,
-            "task_id": task_id,
-            "context_id": context_id
-        }
-        if extra:
-            log_entry.update(extra)
-        if structured:
-            msg = json.dumps(log_entry)
-            # Only log to console, avoid file logging to prevent duplication
-            self._log_to_console(msg, level=level)
-        else:
-            # Compose a readable string with all fields
-            parts = [
-                message,
-                f"task_id={task_id}" if task_id else "",
-                f"context_id={context_id}" if context_id else ""
-            ]
-            # Add any extra fields
-            if extra:
-                for k, v in extra.items():
-                    if k not in ("agent_name",):
-                        parts.append(f"{k}={v}")
-            std_msg = " ".join([p for p in parts if p])
-            # Only log to console, avoid file logging to prevent duplication
-            self._log_to_console(std_msg, level=level)
+        py_level = getattr(logging, level.upper(), logging.INFO)
+        self._emit(py_level, message, task_id=task_id, context_id=context_id, extra=extra)
 
-# Global AgentLogger for decorator logs (must be after class definition)
-_decorator_logger = AgentLogger("DECORATOR")
+    # ── Async log (for websocket streaming) ──────────────────────────────
 
-def log_sync(func: Callable) -> Callable:
-    """No-op decorator - structured logging is used instead."""
-    return func
+    async def alog(
+        self,
+        message: str,
+        level: str = "INFO",
+        **kwargs: Any,
+    ) -> None:
+        """Async variant that also pushes to websocket if configured."""
+        py_level = getattr(logging, level.upper(), logging.INFO)
+        self._emit(py_level, message, **kwargs)
 
-def log_async(func: Callable) -> Callable:
-    """No-op decorator - structured logging is used instead."""
-    return func
+        # Websocket push (fire-and-forget)
+        if self._websocket and self._stream_fn:
+            try:
+                await self._stream_fn("logs", self.agent_name, message, self._websocket)
+            except Exception:
+                pass  # never let WS failure crash the agent
+
+    def set_websocket(self, websocket: Any, stream_fn: Callable[..., Any]) -> None:
+        """Attach a websocket sink for live streaming."""
+        self._websocket = websocket
+        self._stream_fn = stream_fn
+
+    # ── Factory ──────────────────────────────────────────────────────────
+
+    @classmethod
+    def create(cls, agent_name: str) -> "AgentLogger":
+        """Factory method (alias for constructor)."""
+        return cls(agent_name)
+
+    # Keep old name for backward compat
+    create_logger = create
+
+    def __repr__(self) -> str:
+        return f"AgentLogger({self.agent_name!r})"
