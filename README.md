@@ -12,7 +12,7 @@
   <a href="https://github.com/talkops-ai/aws-orchestrator-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square" alt="License"/></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.12+"/></a>
   <a href="https://github.com/talkops-ai/aws-orchestrator-agent/stargazers"><img src="https://img.shields.io/github/stars/talkops-ai/aws-orchestrator-agent?style=flat-square&cacheSeconds=3600" alt="Stars"/></a>
-  <a href="https://discord.gg/atmbXUnVMJ"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"/></a>
+  <a href="https://discord.gg/RzqRy6uKAm"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2.svg?style=flat-square&logo=discord&logoColor=white" alt="Discord"/></a>
   <a href="https://github.com/talkops-ai/aws-orchestrator-agent/issues"><img src="https://img.shields.io/github/issues/talkops-ai/aws-orchestrator-agent?style=flat-square&cacheSeconds=3600" alt="Open Issues"/></a>
 </p>
 
@@ -644,7 +644,7 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 **Project:** [github.com/talkops-ai/aws-orchestrator-agent](https://github.com/talkops-ai/aws-orchestrator-agent)
 
-**Discord:** [Join the community](https://discord.gg/atmbXUnVMJ)
+**Discord:** [Join the community](https://discord.gg/RzqRy6uKAm)
 
 ---
 

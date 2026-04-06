@@ -30,7 +30,7 @@
                 "params": {
                     "metadata": {
                         "githubRepo": "https://github.com/talkops-ai/aws-orchestrator-agent",
-                        "discordUrl": "https://discord.gg/atmbXUnVMJ",
+                        "discordUrl": "https://discord.gg/RzqRy6uKAm",
                         "placeholder": "Provision AWS infrastructure with Terraform..."
                     },
                     "capabilityDescription": {
