@@ -1,15 +1,7 @@
 ---
 name: tf-module-updater
-description: >
-  Fetches existing Terraform modules from GitHub via MCP tools and applies
-  targeted, surgical edits. Reads module-index.md to locate modules in the
-  repository, uses get_file_contents to fetch current files with SHAs, and
-  applies changes via edit_file without full file rewrites. Use when asked to
-  update, modify, patch, or change an existing Terraform module that is already
-  committed to GitHub. Not for new module creation.
-compatibility: >
-  Requires GitHub MCP server tools (list_directory_contents, get_file_contents,
-  create_or_update_file). Requires read_file, write_file, and edit_file tools.
+description: "Fetches existing Terraform modules from GitHub via MCP tools and applies targeted, surgical edits. Reads module-index.md to locate modules in the repository, uses get_file_contents to fetch current files with SHAs, and applies changes via edit_file without full file rewrites. Use when asked to update, modify, patch, or change an existing Terraform module that is already committed to GitHub. Not for new module creation."
+compatibility: "Requires GitHub MCP server tools (list_directory_contents, get_file_contents, create_or_update_file). Requires read_file, write_file, and edit_file tools."
 metadata:
   author: talkops-ai
   version: "1.0"
@@ -19,12 +11,7 @@ allowed-tools: read_file write_file edit_file ls grep
 
 # Terraform Module Updater
 
-## Overview
-
-You fetch existing Terraform modules from GitHub and apply targeted changes.
-You never rewrite entire files — you make surgical, minimal edits that
-preserve existing formatting and conventions. This is the UPDATE workflow
-counterpart to the tf-generator's CREATE workflow.
+Fetches existing Terraform modules from GitHub and applies surgical edits. Counterpart to the tf-generator's CREATE workflow — this is the UPDATE workflow.
 
 ## Workflow
 
@@ -33,103 +20,100 @@ Progress:
 - [ ] Step 2: Fetch existing module files from GitHub
 - [ ] Step 3: Analyze the existing code structure
 - [ ] Step 4: Apply targeted changes
-- [ ] Step 5: Update documentation
-- [ ] Step 6: Return summary
+- [ ] Step 5: Validate changes
+- [ ] Step 6: Update documentation
+- [ ] Step 7: Return summary
 
 ### 1. Locate the Module
 
-Read the module index to find the module path:
+Read the module index and org conventions:
 
 ```
 read_file /memories/module-index.md
-```
-
-The index contains entries like:
-```
-| Service | Repo Path | Last Updated |
-|---------|-----------|-------------|
-| {service} | modules/{service}/ | 2025-01-15 |
-```
-
-If the module is not in the index, ask the coordinator for the repository path.
-
-Also load organizational conventions:
-```
 read_file /memories/org-standards.md
 ```
 
+The index maps services to repo paths. If the module is not in the index, ask the coordinator for the repository path.
+
 ### 2. Fetch Existing Files from GitHub
 
-Use GitHub MCP tools to fetch all `.tf` files:
+Use GitHub MCP tools to fetch all `.tf` files with their SHAs:
 
-1. List the directory contents:
-   ```
-   list_directory_contents(repo, module_path)
-   ```
+```
+list_directory_contents(repo="{owner}/{repo}", path="{module_path}")
+```
 
-2. For each file, fetch the content AND SHA:
-   ```
-   get_file_contents(repo, file_path)
-   ```
+For each file, fetch content and SHA (needed for commit operations):
 
-3. Write fetched files to the local workspace:
-   ```
-   write_file ./workspace/terraform_modules/{service}/{filename} {content}
-   ```
+```
+get_file_contents(repo="{owner}/{repo}", path="{module_path}/main.tf")
+# Response includes: content, sha, encoding
+```
 
-> **Critical**: Track the SHA of every file you fetch. You will need it when
-> committing changes back to GitHub.
+Write fetched files to workspace:
+
+```
+write_file ./workspace/terraform_modules/{service}/{filename} {content}
+```
+
+Track every SHA — you need them when committing back via `create_or_update_file`.
 
 ### 3. Analyze the Existing Code
 
-Before making changes, understand the current module:
-- Resource naming conventions used
-- Variable naming patterns
-- Tagging strategy
-- Provider version constraints
-- Conditional creation patterns (`count` or `for_each`)
-
-See [references/update-patterns.md](references/update-patterns.md) for common
-analysis patterns.
+Identify the module's conventions before editing. See [references/update-patterns.md](references/update-patterns.md) for detailed patterns. Key signals:
+- Iteration pattern (`count` or `for_each`) — follow whichever the module uses
+- Naming conventions for resources, variables, and toggles
+- Tagging strategy (merge pattern, prefix patterns)
 
 ### 4. Apply Targeted Changes
 
 Use `edit_file` for ALL modifications. Never rewrite an entire file.
 
+**Example — adding a variable to an existing `variables.tf`:**
+
+```
+edit_file(
+  path="./workspace/terraform_modules/{service}/variables.tf",
+  edits=[{
+    old_text='variable "tags" {',
+    new_text='variable "enable_logging" {\n  description = "Whether to enable access logging"\n  type        = bool\n  default     = true\n}\n\nvariable "tags" {'
+  }]
+)
+```
+
 **Rules for surgical edits:**
 - Only touch files that need changing
 - Preserve existing formatting, indentation, and conventions
-- When adding new resources, follow the established naming patterns
-- When adding variables, maintain alphabetical or logical grouping
-- When modifying `count` or `for_each` expressions, verify all dependent
-  references (outputs, other resources, data sources)
-- When changing `for_each` keys, verify that outputs using `values()` or
-  direct key access are still valid
+- Follow the module's established iteration pattern — do not mix `count` and `for_each`
+- When modifying `count` or `for_each`, verify all dependent references (outputs, other resources, data sources)
+- When changing `for_each` keys, verify outputs using `values()` or direct key access
 
-### 5. Update Documentation
+### 5. Validate Changes
 
-If inputs or outputs changed:
-- Update the README.md inputs table
-- Update the README.md outputs table
-- Update any usage examples that reference changed variables
+After applying edits, run validation to catch errors before committing:
 
-### 6. Return Summary
+```
+execute("cd workspace/terraform_modules/{service} && terraform init -input=false -no-color -backend=false && terraform validate -no-color")
+```
+
+If validation fails, review the error, fix the edit, and re-validate. Do not proceed to documentation or commit with failing validation.
+
+### 6. Update Documentation
+
+If inputs or outputs changed, update README.md: inputs table, outputs table, and any usage examples referencing changed variables.
+
+### 7. Return Summary
 
 Return exactly:
 ```
-Updated {N} files: [list]. Changes made: [diff summary].
+Updated {N} files: [list]. Changes made: [diff summary]. Validation: PASSED.
 ```
 
 ## Gotchas
 
-- NEVER rewrite an entire file — make targeted, surgical edits only
+- NEVER rewrite an entire file — surgical edits only
 - ALWAYS track file SHAs for GitHub commit operations
-- If `get_file_contents` returns an error (404), the file doesn't exist —
-  treat it as a new file for the commit operation
-- Changing a variable's type is a BREAKING CHANGE — flag it explicitly
-- Removing a variable or output is a BREAKING CHANGE — flag it explicitly
-- When changing `count` to `for_each` (or vice versa), Terraform will
-  DESTROY and RECREATE all instances **unless** `moved` blocks are added
-  to map each old address to the new one — always recommend `moved` blocks
-- Splat expressions (`[*]`) work with `count` but NOT directly with
-  `for_each` — use `values(resource)[*].attr` instead
+- If `get_file_contents` returns 404, treat as a new file (no SHA needed)
+- Changing a variable's type or removing a variable/output is a BREAKING CHANGE — flag explicitly
+- When switching `count` ↔ `for_each`, add `moved` blocks to prevent destroy/recreate
+- Splat `[*]` works with `count` but not `for_each` — use `values(resource)[*].attr` instead

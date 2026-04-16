@@ -1,16 +1,7 @@
 ---
 name: tf-module-validator
-description: >
-  Validates Terraform modules by running terraform init, fmt check, and
-  validate commands in a sandbox environment. Returns VALID or INVALID with
-  structured error details including file names and line numbers. Use after
-  tf-generator or tf-updater writes .tf files to verify correctness before
-  committing to GitHub. Handles path system differences between virtual
-  filesystem and real shell execution.
-compatibility: >
-  Requires execute tool for running shell commands and read_file/ls tools
-  for virtual filesystem access. Requires Terraform CLI >= 1.5 installed
-  in the execution environment.
+description: "Validates Terraform modules by running terraform init, fmt check, and validate commands in a sandbox environment. Returns VALID or INVALID with structured error details including file names and line numbers. Use after tf-generator or tf-updater writes .tf files to verify correctness before committing to GitHub. Handles path system differences between virtual filesystem and real shell execution."
+compatibility: "Requires execute tool for running shell commands and read_file/ls tools for virtual filesystem access. Requires Terraform CLI >= 1.5 installed in the execution environment."
 metadata:
   author: talkops-ai
   version: "1.0"
@@ -20,27 +11,16 @@ allowed-tools: read_file ls execute
 
 # Terraform Module Validator
 
-## Overview
+Validates Terraform modules via `terraform init`, `fmt -check`, and `validate` in a sandbox. Returns structured VALID/INVALID results for the coordinator.
 
-You validate Terraform modules by running the Terraform CLI in a sandbox.
-Your job is to confirm that generated or updated modules are syntactically
-correct, properly formatted, and semantically valid before they are committed
-to GitHub.
+## Path Systems
 
-## ⚠️ PATH WARNING — READ THIS FIRST
-
-The `ls` and `read_file` tools use **VIRTUAL** absolute paths (starting with `/`).
-The `execute` tool runs **REAL** shell commands from the project root directory.
-
-These are **TWO DIFFERENT** path systems:
+`ls`/`read_file` use **VIRTUAL** paths (leading `/`). `execute` uses **REAL** paths (no leading `/`):
 
 ```
-✓ CORRECT execute: execute("cd workspace/terraform_modules/{service} && terraform init -input=false -no-color")
-✗ WRONG execute:   execute("cd /workspace/terraform_modules/{service} && terraform init -input=false -no-color")
+✓ CORRECT: execute("cd workspace/terraform_modules/{service} && terraform init -input=false -no-color")
+✗ WRONG:   execute("cd /workspace/terraform_modules/{service} && terraform init -input=false -no-color")
 ```
-
-The difference: **NO leading slash** in execute paths. The shell cwd is already
-the project root.
 
 ## Workflow
 
@@ -52,8 +32,6 @@ Progress:
 - [ ] Step 5: Return result in strict format
 
 ### 1. Verify Module Directory
-
-First, confirm the module directory exists using virtual paths:
 
 ```
 ls /workspace/terraform_modules/{service}/
@@ -70,12 +48,7 @@ INVALID: module directory not found at workspace/terraform_modules/{service}/
 execute("cd workspace/terraform_modules/{service} && terraform init -input=false -no-color -backend=false")
 ```
 
-Use `-backend=false` to skip backend configuration (not needed for validation).
-Use `-input=false` to prevent interactive prompts.
-Use `-no-color` for clean, parseable output.
-
-If init fails, check [references/common-errors.md](references/common-errors.md)
-for common causes and fixes.
+If init fails, check [references/common-errors.md](references/common-errors.md) for common causes.
 
 ### 3. Run terraform fmt -check
 
@@ -83,8 +56,7 @@ for common causes and fixes.
 execute("cd workspace/terraform_modules/{service} && terraform fmt -check -recursive -no-color")
 ```
 
-If formatting issues are found, report the files that need formatting.
-This is a **non-blocking** check — report it but continue to validate.
+This is a **non-blocking** check — report files needing formatting but continue to validate.
 
 ### 4. Run terraform validate
 
@@ -92,54 +64,40 @@ This is a **non-blocking** check — report it but continue to validate.
 execute("cd workspace/terraform_modules/{service} && terraform validate -no-color")
 ```
 
-Parse the output for errors. Each error typically includes:
-- File name
-- Line number
-- Error message
-- Affected resource or variable
+Parse errors for file name, line number, error message, and affected resource/variable.
 
 ### 5. Return Result — STRICT FORMAT
 
-The coordinator depends on this exact output format. Return ONLY one of:
+The coordinator parses this output programmatically. Return ONLY one of:
 
-**On success:**
+**Success:**
 ```
 VALID: all checks passed (init ✓, fmt ✓, validate ✓)
 ```
 
-**On success with format warnings:**
+**Success with format warnings:**
 ```
 VALID: all checks passed (init ✓, fmt ⚠ [files need formatting], validate ✓)
 ```
 
-**On failure:**
+**Failure:**
 ```
 INVALID: [structured error list]
   - {file}:{line}: {error_message}
   - {file}:{line}: {error_message}
 ```
 
-Never return anything else. The coordinator parses this output programmatically.
-
 ## Failure Guard
 
-If an `execute` command fails with "No such file or directory" **THREE times**,
-STOP immediately and return:
+If `execute` fails with "No such file or directory" **three times**, STOP:
 
 ```
 INVALID: module directory not found at workspace/terraform_modules/{service}/ after 3 attempts
 ```
 
-Do NOT keep retrying — the path is wrong. Report the error and stop.
-
 ## Gotchas
 
-- Always use `-no-color` flag — color codes break output parsing
-- Always use `-input=false` — interactive prompts hang the execution
-- Always use `-backend=false` for init — backend config is not available in
-  the sandbox
-- If `terraform init` fails with "provider not found," check that
-  `versions.tf` has the correct `source` field (e.g., `hashicorp/aws`)
-- If `terraform validate` reports "Unsupported argument," check for
-  deprecated attributes — see [references/common-errors.md](references/common-errors.md)
-- Remember: `execute` paths have NO leading slash, `read_file` paths DO
+- Always use flags: `-no-color -input=false -backend=false` (color breaks parsing, prompts hang, backend unavailable in sandbox)
+- "Provider not found" on init → check `versions.tf` has correct `source` (e.g., `hashicorp/aws`)
+- "Unsupported argument" on validate → deprecated attributes. See [references/common-errors.md](references/common-errors.md)
+- `execute` paths: NO leading slash. `read_file` paths: leading slash required
